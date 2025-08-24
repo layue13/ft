@@ -3,6 +3,7 @@
 用于检测网络环境并选择合适的Hugging Face镜像站
 """
 
+import os
 import yaml
 import requests
 import time
