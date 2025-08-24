@@ -1,9 +1,7 @@
-# Space专用训练配置文件
-# 针对Hugging Face Spaces环境优化
-
+# Windows CUDA环境训练配置文件
 model:
   name: "google/gemma-3-1b-it"
-  max_length: 1024  # 减少序列长度以节省显存
+  max_length: 2048
   use_4bit: true
   use_nested_quant: true
   bnb_4bit_compute_dtype: "bfloat16"
@@ -12,11 +10,11 @@ dataset:
   name: "shawhin/tool-use-finetuning"
   train_split: "train"
   validation_split: "validation"
-  max_samples: 100  # 限制样本数量以节省时间
+  max_samples: null  # null表示使用全部数据
 
 lora:
-  r: 8  # 减少rank以节省显存
-  lora_alpha: 16
+  r: 16
+  lora_alpha: 32
   lora_dropout: 0.1
   bias: "none"
   task_type: "CAUSAL_LM"
@@ -24,17 +22,17 @@ lora:
 
 training:
   output_dir: "./outputs"
-  num_train_epochs: 1  # 减少训练轮数
-  per_device_train_batch_size: 2  # 减少batch size
+  num_train_epochs: 3
+  per_device_train_batch_size: 2  # Windows上使用较小的batch size
   per_device_eval_batch_size: 2
-  gradient_accumulation_steps: 4
+  gradient_accumulation_steps: 8  # 增加梯度累积步数
   learning_rate: 2e-4
   weight_decay: 0.01
-  warmup_steps: 10  # 减少warmup步数
-  logging_steps: 5
-  eval_steps: 20
-  save_steps: 50
-  save_total_limit: 2
+  warmup_steps: 100
+  logging_steps: 10
+  eval_steps: 100
+  save_steps: 500
+  save_total_limit: 3
   evaluation_strategy: "steps"
   save_strategy: "steps"
   load_best_model_at_end: true
@@ -44,10 +42,15 @@ training:
   dataloader_pin_memory: false
   remove_unused_columns: false
   push_to_hub: false
-  report_to: "none"  # 禁用wandb以节省资源
+  report_to: "wandb"
+  # Windows优化设置
+  dataloader_num_workers: 2  # Windows上减少worker数量
+  gradient_checkpointing: true
+  optim: "paged_adamw_8bit"
+  lr_scheduler_type: "cosine"
 
 data_processing:
-  max_seq_length: 1024  # 减少序列长度
+  max_seq_length: 2048
   text_column: "text"
   remove_columns: ["id", "conversations"]
   template_format: "tool_use"

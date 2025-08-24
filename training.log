@@ -266,3 +266,9 @@ that match your environment. Please note that you may need to restart your runti
 401 Client Error: Unauthorized for url: https://huggingface.co/google/gemma-3-1b-it/resolve/main/model.safetensors (Request ID: Root=1-68ab4b9d-3ec87d97644ab0bb0fb651c8;5dd84982-b10c-4e37-92fd-f7a4fcf39671)
 
 Invalid credentials in Authorization header
+2025-08-25 01:37:54,103 - __main__ - INFO - 开始数据测试...
+2025-08-25 01:37:54,104 - __main__ - INFO - 加载模型和分词器...
+2025-08-25 01:37:55,628 - __main__ - ERROR - 测试过程中发生错误: There was a specific connection error when trying to load google/gemma-3-1b-it:
+401 Client Error: Unauthorized for url: https://huggingface.co/google/gemma-3-1b-it/resolve/main/model.safetensors (Request ID: Root=1-68ab4df3-2974d21d134853b30f95f58b;16e69cdb-6dbf-403d-8a7c-0e2e03c1ebed)
+
+Invalid credentials in Authorization header

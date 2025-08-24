@@ -33,6 +33,7 @@ dev = [
 
 # 仅在Linux/Windows上安装bitsandbytes
 linux = ["bitsandbytes>=0.41.0"]
+windows = ["bitsandbytes>=0.41.0"]
 
 [build-system]
 requires = ["hatchling"]
