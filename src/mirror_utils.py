@@ -132,52 +132,58 @@ class MirrorSelector:
         return "huggingface", official_config
     
     def get_model_url(self, model_name: str, mirror_name: Optional[str] = None) -> str:
-        """获取模型URL"""
+        """获取模型URL - 返回原始模型名称，通过环境变量设置镜像站"""
         if not mirror_name:
             mirror_name, mirror_config = self.select_best_mirror()
         else:
             mirror_config = self.config["mirrors"][mirror_name]
         
+        # 设置环境变量以使用镜像站
         base_url = mirror_config["base_url"]
-        models_path = mirror_config.get("models_path", "")
-        
-        # 处理不同的镜像站URL格式
         if mirror_name == "hf_mirror":
-            # HF Mirror格式: https://hf-mirror.com/google/gemma-3-1b-it
-            return f"{base_url}/{model_name}"
+            os.environ["HF_ENDPOINT"] = base_url
+            logger.info(f"设置HF_ENDPOINT环境变量: {base_url}")
         elif mirror_name == "modelscope":
-            # ModelScope格式: https://modelscope.cn/models/google/gemma-3-1b-it
-            return f"{base_url}{models_path}/{model_name}"
+            os.environ["HF_ENDPOINT"] = base_url
+            logger.info(f"设置HF_ENDPOINT环境变量: {base_url}")
         elif mirror_name == "tsinghua":
-            # 清华镜像格式: https://mirrors.tuna.tsinghua.edu.cn/hugging-face-models/google/gemma-3-1b-it
-            return f"{base_url}{models_path}/{model_name}"
+            os.environ["HF_ENDPOINT"] = base_url
+            logger.info(f"设置HF_ENDPOINT环境变量: {base_url}")
         else:
-            # Hugging Face官方格式: https://huggingface.co/google/gemma-3-1b-it
-            return f"{base_url}/{model_name}"
+            # 官方源，清除环境变量
+            if "HF_ENDPOINT" in os.environ:
+                del os.environ["HF_ENDPOINT"]
+            logger.info("使用Hugging Face官方源")
+        
+        # 返回原始模型名称
+        return model_name
     
     def get_dataset_url(self, dataset_name: str, mirror_name: Optional[str] = None) -> str:
-        """获取数据集URL"""
+        """获取数据集URL - 返回原始数据集名称，通过环境变量设置镜像站"""
         if not mirror_name:
             mirror_name, mirror_config = self.select_best_mirror()
         else:
             mirror_config = self.config["mirrors"][mirror_name]
         
+        # 设置环境变量以使用镜像站
         base_url = mirror_config["base_url"]
-        datasets_path = mirror_config.get("datasets_path", "")
-        
-        # 处理不同的镜像站URL格式
         if mirror_name == "hf_mirror":
-            # HF Mirror格式: https://hf-mirror.com/datasets/shawhin/tool-use-finetuning
-            return f"{base_url}/datasets/{dataset_name}"
+            os.environ["HF_ENDPOINT"] = base_url
+            logger.info(f"设置HF_ENDPOINT环境变量: {base_url}")
         elif mirror_name == "modelscope":
-            # ModelScope格式: https://modelscope.cn/datasets/shawhin/tool-use-finetuning
-            return f"{base_url}{datasets_path}/{dataset_name}"
+            os.environ["HF_ENDPOINT"] = base_url
+            logger.info(f"设置HF_ENDPOINT环境变量: {base_url}")
         elif mirror_name == "tsinghua":
-            # 清华镜像格式: https://mirrors.tuna.tsinghua.edu.cn/hugging-face-models/datasets--shawhin--tool-use-finetuning
-            return f"{base_url}{datasets_path}/datasets--{dataset_name.replace('/', '--')}"
+            os.environ["HF_ENDPOINT"] = base_url
+            logger.info(f"设置HF_ENDPOINT环境变量: {base_url}")
         else:
-            # Hugging Face官方格式: https://huggingface.co/datasets/shawhin/tool-use-finetuning
-            return f"{base_url}/datasets/{dataset_name}"
+            # 官方源，清除环境变量
+            if "HF_ENDPOINT" in os.environ:
+                del os.environ["HF_ENDPOINT"]
+            logger.info("使用Hugging Face官方源")
+        
+        # 返回原始数据集名称
+        return dataset_name
     
     def is_china_network(self) -> bool:
         """检测是否在中国网络环境"""

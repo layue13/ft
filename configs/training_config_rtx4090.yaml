@@ -1,0 +1,71 @@
+# RTX 4090优化训练配置文件
+model:
+  name: "google/gemma-3-1b-it"
+  max_length: 2048  # RTX 4090可以使用更长的序列
+  use_4bit: true
+  use_nested_quant: true
+  bnb_4bit_compute_dtype: "bfloat16"
+
+dataset:
+  name: "shawhin/tool-use-finetuning"
+  train_split: "train"
+  validation_split: "validation"
+  max_samples: 1000  # RTX 4090可以处理更多数据
+
+# 镜像站配置
+mirror:
+  name: "hf_mirror"  # 使用HF Mirror标准镜像站
+  auto_detect: true   # 自动检测最佳镜像站
+
+lora:
+  r: 16  # RTX 4090可以使用更高的rank
+  lora_alpha: 32
+  lora_dropout: 0.1
+  bias: "none"
+  task_type: "CAUSAL_LM"
+  target_modules: ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+
+training:
+  output_dir: "./outputs"
+  num_train_epochs: 3  # RTX 4090可以训练更多轮数
+  per_device_train_batch_size: 8  # RTX 4090可以使用更大的batch size
+  per_device_eval_batch_size: 8
+  gradient_accumulation_steps: 4  # 减少梯度累积步数
+  learning_rate: 2e-4
+  weight_decay: 0.01
+  warmup_steps: 100
+  logging_steps: 10
+  eval_steps: 100
+  save_steps: 500
+  save_total_limit: 3
+  evaluation_strategy: "steps"
+  save_strategy: "steps"
+  load_best_model_at_end: true
+  metric_for_best_model: "eval_loss"
+  greater_is_better: false
+  fp16: true
+  dataloader_pin_memory: true  # RTX 4090可以启用pin_memory
+  remove_unused_columns: false
+  push_to_hub: false
+  report_to: "wandb"
+  # RTX 4090优化设置
+  dataloader_num_workers: 8  # 增加worker数量
+  gradient_checkpointing: false  # RTX 4090显存充足，可以关闭梯度检查点
+  optim: "adamw_torch"  # 使用标准AdamW优化器
+  lr_scheduler_type: "cosine"
+  # 内存优化
+  max_grad_norm: 1.0
+  warmup_ratio: 0.1
+  # 性能优化
+  dataloader_prefetch_factor: 2
+  group_by_length: true
+  length_column_name: "length"
+  ignore_data_skip: false
+  ddp_find_unused_parameters: false
+  ddp_bucket_cap_mb: 25
+
+data_processing:
+  max_seq_length: 2048  # 增加序列长度
+  text_column: "text"
+  remove_columns: ["id", "conversations"]
+  template_format: "tool_use"

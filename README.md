@@ -139,6 +139,19 @@ uv run python scripts/train_with_mirror.py --mirror tsinghua
 
 # 自动检测最佳镜像站
 uv run python scripts/train_with_mirror.py --mirror auto
+
+### RTX 4090环境
+
+#### 一键训练 (RTX 4090优化)
+
+```cmd
+scripts/train_rtx4090.bat
+```
+
+#### 手动训练 (RTX 4090优化)
+
+```cmd
+uv run python scripts/train_with_mirror.py --config configs/training_config_rtx4090.yaml --mirror hf_mirror
 ```
 
 ## 配置说明
@@ -167,6 +180,17 @@ Windows环境使用`configs/training_config_windows.yaml`，主要优化：
  - 支持HF Mirror、ModelScope、清华镜像等国内镜像站
  - 优化的网络连接参数
  - 减少数据集大小以适应网络限制
+
+### RTX 4090优化配置
+
+RTX 4090使用`configs/training_config_rtx4090.yaml`，主要优化：
+
+ - 更大的batch size（8）充分利用24GB显存
+ - 更长的序列长度（2048）提高训练效果
+ - 更多的数据集样本（1000）提升模型性能
+ - 更高的LoRA rank（16）增强模型表达能力
+ - 关闭梯度检查点以提升训练速度
+ - 启用pin_memory和更多worker提升数据加载效率
 
 ## 技术栈
 
