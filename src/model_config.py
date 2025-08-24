@@ -87,12 +87,14 @@ def create_training_arguments(config: Dict[str, Any]) -> TrainingArguments:
         gradient_checkpointing=True,
         dataloader_num_workers=4,
         group_by_length=True,
+        # Gemma3特定设置
+        remove_unused_columns=False,
     )
 
 
 def load_model_and_tokenizer(
     config: Dict[str, Any]
-) -> Tuple[AutoModelForCausalLM, AutoTokenizer]:
+) -> Tuple[Any, AutoTokenizer]:
     """加载模型和分词器"""
     model_name = config["model"]["name"]
     
@@ -159,12 +161,14 @@ def load_model_and_tokenizer(
     return model, tokenizer
 
 
-def prepare_model_for_training(model: AutoModelForCausalLM) -> AutoModelForCausalLM:
+def prepare_model_for_training(model: Any) -> Any:
     """准备模型进行训练"""
     # 启用梯度检查点以节省内存
-    model.gradient_checkpointing_enable()
+    if hasattr(model, 'gradient_checkpointing_enable'):
+        model.gradient_checkpointing_enable()
     
     # 启用模型并行
-    model.enable_input_require_grads()
+    if hasattr(model, 'enable_input_require_grads'):
+        model.enable_input_require_grads()
     
     return model
