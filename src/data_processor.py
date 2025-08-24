@@ -1,10 +1,11 @@
 """
-数据处理模块
+数据处理模块 - 优化版本
 """
 
 import json
 import logging
-from typing import Dict, Any, List, Optional
+import re
+from typing import Dict, Any, List, Optional, Tuple
 from datasets import Dataset, load_dataset
 from transformers import PreTrainedTokenizer
 
@@ -12,17 +13,73 @@ from transformers import PreTrainedTokenizer
 logger = logging.getLogger(__name__)
 
 
+class ToolCallValidator:
+    """工具调用格式验证器"""
+    
+    @staticmethod
+    def validate_tool_call(content: Any) -> Tuple[bool, str]:
+        """验证工具调用格式"""
+        if not isinstance(content, dict):
+            return False, "工具调用内容必须是字典格式"
+        
+        required_fields = ["name", "arguments"]
+        for field in required_fields:
+            if field not in content:
+                return False, f"缺少必需字段: {field}"
+        
+        if not isinstance(content["name"], str):
+            return False, "工具名称必须是字符串"
+        
+        if not isinstance(content["arguments"], dict):
+            return False, "工具参数必须是字典格式"
+        
+        return True, "格式正确"
+    
+    @staticmethod
+    def extract_tool_calls(text: str) -> List[Dict[str, Any]]:
+        """从文本中提取工具调用"""
+        tool_calls = []
+        # 匹配 <tool_call>...</tool_call> 格式
+        pattern = r'<tool_call>(.*?)</tool_call>'
+        matches = re.findall(pattern, text, re.DOTALL)
+        
+        for match in matches:
+            try:
+                # 解析工具调用内容
+                lines = match.strip().split('\n')
+                tool_call = {}
+                
+                for line in lines:
+                    if ':' in line:
+                        key, value = line.split(':', 1)
+                        key = key.strip()
+                        value = value.strip()
+                        
+                        if key == 'name':
+                            tool_call['name'] = value
+                        elif key == 'arguments':
+                            tool_call['arguments'] = json.loads(value)
+                        elif key == 'result':
+                            tool_call['result'] = value
+                
+                if 'name' in tool_call and 'arguments' in tool_call:
+                    tool_calls.append(tool_call)
+            except Exception as e:
+                logger.warning(f"解析工具调用失败: {e}")
+        
+        return tool_calls
+
+
 class ToolUseDataProcessor:
-    """工具调用数据处理器"""
+    """工具调用数据处理器 - 优化版本"""
     
     def __init__(self, tokenizer: PreTrainedTokenizer, config: Dict[str, Any]):
         self.tokenizer = tokenizer
         self.config = config
         self.max_length = config["data_processing"]["max_seq_length"]
-        self.text_column = config["data_processing"]["text_column"]
-        self.remove_columns = config["data_processing"]["remove_columns"]
-        self.template_format = config["data_processing"]["template_format"]
-    
+        self.validator = ToolCallValidator()
+        self._template_warning_count = 0  # 添加警告计数器
+        
     def load_dataset(self, dataset_name: str, split: str = "train") -> Dataset:
         """加载数据集"""
         logger.info(f"正在加载数据集: {dataset_name}, 分割: {split}")
@@ -46,75 +103,117 @@ class ToolUseDataProcessor:
             logger.error(f"加载数据集失败: {e}")
             raise
     
-    def format_conversation(self, conversation: Dict[str, Any]) -> list:
-        """格式化对话为Gemma3消息格式"""
-        # 处理shawhin/tool-use-finetuning数据集的格式
-        if "trace" in conversation:
-            messages = conversation["trace"]
-        else:
-            messages = conversation.get("conversations", [])
+    def format_tool_call(self, tool_content: Dict[str, Any]) -> str:
+        """格式化工具调用 - 简化版本"""
+        tool_name = tool_content.get("name", "")
+        tool_args = tool_content.get("arguments", {})
+        tool_result = tool_content.get("result", "")
         
+        # 验证工具调用格式
+        is_valid, message = self.validator.validate_tool_call(tool_content)
+        if not is_valid:
+            logger.warning(f"工具调用格式无效: {message}")
+            return f"<tool_call>\nname: {tool_name}\narguments: {json.dumps(tool_args, ensure_ascii=False)}\n</tool_call>"
+        
+        # 构建标准格式
+        formatted = f"<tool_call>\nname: {tool_name}\narguments: {json.dumps(tool_args, ensure_ascii=False)}"
+        if tool_result:
+            formatted += f"\nresult: {tool_result}"
+        formatted += "\n</tool_call>"
+        
+        return formatted
+    
+    def format_conversation(self, conversation: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """格式化对话 - 优化版本，确保角色交替"""
+        # 获取消息列表
+        messages = conversation.get("trace", conversation.get("conversations", []))
         if not messages:
             return []
         
-        # 转换为Gemma3聊天模板格式
         gemma_messages = []
+        last_role = None
         
         for message in messages:
             role = message.get("role", "")
             content = message.get("content", "")
             
+            # 跳过system角色，因为它不参与交替
             if role == "system":
                 gemma_messages.append({
                     "role": "system",
                     "content": [{"type": "text", "text": content}]
                 })
-            elif role == "user":
+                continue
+            
+            # 确保user和assistant角色交替
+            if role == "user":
+                if last_role == "user":
+                    # 如果连续两个user，添加一个空的assistant消息
+                    gemma_messages.append({
+                        "role": "assistant",
+                        "content": [{"type": "text", "text": ""}]
+                    })
                 gemma_messages.append({
                     "role": "user", 
                     "content": [{"type": "text", "text": content}]
                 })
+                last_role = "user"
             elif role == "assistant":
-                gemma_messages.append({
-                    "role": "assistant",
-                    "content": [{"type": "text", "text": content}]
-                })
-            elif role == "tool":
-                # 工具调用格式
-                if isinstance(content, dict):
-                    tool_name = content.get("name", "")
-                    tool_args = content.get("arguments", {})
-                    tool_result = content.get("result", "")
-                    
-                    tool_content = f"<tool_call>\n"
-                    tool_content += f"name: {tool_name}\n"
-                    tool_content += f"arguments: {json.dumps(tool_args, ensure_ascii=False)}\n"
-                    if tool_result:
-                        tool_content += f"result: {tool_result}\n"
-                    tool_content += f"</tool_call>"
-                    
+                if last_role == "assistant":
+                    # 如果连续两个assistant，添加一个空的user消息
+                    gemma_messages.append({
+                        "role": "user",
+                        "content": [{"type": "text", "text": ""}]
+                    })
+                
+                # 检查是否包含工具调用
+                if isinstance(content, dict) and "name" in content:
+                    # 工具调用格式
+                    tool_text = self.format_tool_call(content)
                     gemma_messages.append({
                         "role": "assistant",
-                        "content": [{"type": "text", "text": tool_content}]
+                        "content": [{"type": "text", "text": tool_text}]
+                    })
+                else:
+                    # 普通文本
+                    gemma_messages.append({
+                        "role": "assistant",
+                        "content": [{"type": "text", "text": content}]
+                    })
+                last_role = "assistant"
+            elif role == "tool":
+                # 工具结果，作为assistant消息处理
+                if last_role == "assistant":
+                    # 如果连续两个assistant，添加一个空的user消息
+                    gemma_messages.append({
+                        "role": "user",
+                        "content": [{"type": "text", "text": ""}]
+                    })
+                
+                if isinstance(content, dict):
+                    tool_text = self.format_tool_call(content)
+                    gemma_messages.append({
+                        "role": "assistant",
+                        "content": [{"type": "text", "text": tool_text}]
                     })
                 else:
                     gemma_messages.append({
                         "role": "assistant",
                         "content": [{"type": "text", "text": content}]
                     })
+                last_role = "assistant"
         
         return gemma_messages
     
     def tokenize_function(self, examples: Dict[str, Any]) -> Dict[str, Any]:
-        """分词函数"""
-        # 处理shawhin/tool-use-finetuning数据集格式
+        """分词函数 - 优化版本"""
         texts = []
+        
         for i in range(len(examples.get("query", []))):
-            # 构建完整的对话文本
             query = examples["query"][i]
             trace = examples["trace"][i]
             
-            # 格式化对话为Gemma3消息格式
+            # 格式化对话
             gemma_messages = self.format_conversation({"trace": trace})
             
             # 添加用户查询
@@ -123,7 +222,7 @@ class ToolUseDataProcessor:
                 "content": [{"type": "text", "text": query}]
             })
             
-            # 使用Gemma3的聊天模板
+            # 使用Gemma3聊天模板
             try:
                 inputs = self.tokenizer.apply_chat_template(
                     gemma_messages,
@@ -134,14 +233,19 @@ class ToolUseDataProcessor:
                 )
                 texts.append(inputs)
             except Exception as e:
-                # 如果聊天模板失败，回退到简单格式
-                logger.warning(f"聊天模板处理失败，使用简单格式: {e}")
+                # 限制警告日志的输出频率
+                self._template_warning_count += 1
+                if self._template_warning_count <= 5:  # 只显示前5个警告
+                    logger.warning(f"聊天模板处理失败，使用简单格式: {e}")
+                elif self._template_warning_count == 6:
+                    logger.warning("聊天模板处理失败次数过多，后续警告将不再显示...")
+                
+                # 回退到简单格式
                 simple_text = f"User: {query}\nAssistant: "
                 texts.append(simple_text)
         
-        # 分词
+        # 分词处理
         if isinstance(texts[0], dict):
-            # 如果已经是tokenized格式
             tokenized = texts
         else:
             tokenized = self.tokenizer(
@@ -152,22 +256,21 @@ class ToolUseDataProcessor:
                 return_tensors=None,
             )
         
-        # 设置labels为input_ids的副本
+        # 设置labels
         tokenized["labels"] = tokenized["input_ids"].copy()
         
         return tokenized
     
     def process_dataset(self, dataset: Dataset) -> Dataset:
-        """处理数据集"""
+        """处理数据集 - 优化版本"""
         logger.info("开始处理数据集...")
         logger.info(f"原始数据集大小: {len(dataset)}")
-        logger.info(f"原始数据集列名: {dataset.column_names}")
         
         # 移除不需要的列
-        if self.remove_columns:
-            logger.info(f"移除列: {self.remove_columns}")
-            dataset = dataset.remove_columns(self.remove_columns)
-            logger.info(f"移除列后数据集列名: {dataset.column_names}")
+        remove_columns = self.config["data_processing"].get("remove_columns", [])
+        if remove_columns:
+            logger.info(f"移除列: {remove_columns}")
+            dataset = dataset.remove_columns(remove_columns)
         
         # 应用分词
         logger.info("开始分词处理...")
@@ -179,7 +282,6 @@ class ToolUseDataProcessor:
         )
         
         logger.info(f"数据集处理完成，样本数量: {len(tokenized_dataset)}")
-        logger.info(f"处理后数据集列名: {tokenized_dataset.column_names}")
         
         # 打印样本示例
         if len(tokenized_dataset) > 0:
@@ -201,7 +303,7 @@ class ToolUseDataProcessor:
         return dataset
     
     def prepare_training_data(self, dataset_name: str) -> Dict[str, Dataset]:
-        """准备训练数据"""
+        """准备训练数据 - 优化版本"""
         dataset_config = self.config["dataset"]
         
         # 加载训练集
@@ -218,7 +320,7 @@ class ToolUseDataProcessor:
             )
         except Exception as e:
             logger.warning(f"无法加载验证集: {e}")
-            # 如果没有验证集，从训练集中分割
+            # 从训练集中分割
             split_dataset = train_dataset.train_test_split(test_size=0.1)
             train_dataset = split_dataset["train"]
             eval_dataset = split_dataset["test"]

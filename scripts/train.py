@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-训练脚本
+训练脚本 - 优化版本
 使用PEFT微调Gemma3-1b模型以支持工具调用
 """
 
@@ -12,7 +12,7 @@ import os
 # 添加src目录到Python路径
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from src.utils import setup_logging, load_config, validate_config, get_device_info
+from src.utils import setup_logging, load_config, validate_config, get_device_info, log_system_info
 from src.model_config import load_model_and_tokenizer
 from src.data_processor import create_data_processor
 from src.trainer import create_trainer
@@ -46,6 +46,9 @@ def main():
     # 设置日志
     setup_logging(args.log_level)
     logger = logging.getLogger(__name__)
+    
+    # 记录系统信息
+    log_system_info()
     
     logger.info("开始训练流程...")
     

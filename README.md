@@ -1,10 +1,19 @@
-# Gemma3-1b 工具调用微调项目
+# Gemma3-1b 工具调用微调项目 - 优化版本
 
 使用PEFT（Parameter Efficient Fine-Tuning）微调Gemma3-1b模型，使其支持工具调用功能。
 
 ## 项目概述
 
 本项目使用shawhin/tool-use-finetuning数据集对Google的Gemma3-1b模型进行微调，通过LoRA（Low-Rank Adaptation）方法实现参数高效的微调，使模型能够理解和执行工具调用任务。
+
+### 🚀 最新优化
+
+- **简化数据处理逻辑**：优化工具调用格式转换，提高处理效率
+- **增强验证机制**：添加工具调用格式验证和配置验证
+- **针对性评估指标**：新增工具调用准确率、F1分数等专业指标
+- **优化配置管理**：简化配置文件，减少冗余参数
+- **增强测试覆盖**：完善单元测试和集成测试
+- **性能优化**：提供优化版配置文件，提升训练效率
 
 ## 环境要求
 
@@ -36,24 +45,44 @@ uv sync
 gemma3-tool-finetuning/
 ├── src/
 │   ├── __init__.py
-│   ├── data_processor.py      # 数据处理模块
+│   ├── data_processor.py      # 数据处理模块（优化版）
 │   ├── model_config.py        # 模型配置
-│   ├── trainer.py             # 训练器
-│   └── utils.py               # 工具函数
+│   ├── trainer.py             # 训练器（优化版）
+│   ├── utils.py               # 工具函数（优化版）
+│   └── mirror_utils.py        # 镜像站工具
 ├── configs/
-│   └── training_config.yaml   # 训练配置
+│   ├── training_config.yaml           # 标准训练配置
+│   ├── training_config_optimized.yaml # 优化训练配置
+│   └── training_config_*.yaml         # 其他环境配置
 ├── scripts/
 │   ├── prepare_data.py        # 数据准备脚本
-│   ├── train.py               # 训练脚本
-│   └── evaluate.py            # 评估脚本
-├── tests/                     # 测试文件
+│   ├── train.py               # 训练脚本（优化版）
+│   ├── evaluate.py            # 评估脚本（优化版）
+│   └── train_*.bat            # 环境特定脚本
+├── tests/                     # 测试文件（增强版）
 ├── pyproject.toml            # 项目配置
 └── README.md                 # 项目文档
 ```
 
 ## 使用方法
 
-### Linux/macOS环境
+### 快速开始（推荐）
+
+#### 1. 使用优化配置训练
+
+```bash
+# 使用优化配置进行训练
+uv run python scripts/train.py --config configs/training_config_optimized.yaml
+```
+
+#### 2. 评估模型性能
+
+```bash
+# 评估模型工具调用能力
+uv run python scripts/evaluate.py --model_path ./outputs --max_samples 100
+```
+
+### 标准训练流程
 
 #### 1. 数据准备
 
@@ -73,124 +102,63 @@ uv run python scripts/train.py --config configs/training_config.yaml
 uv run python scripts/evaluate.py --model_path ./outputs/checkpoint-final
 ```
 
-### Windows CUDA环境
+### 环境特定训练
 
-#### 1. 环境设置
+#### Windows CUDA环境
 
 ```cmd
 scripts/setup_windows.bat
-```
-
-#### 2. 登录Hugging Face
-
-```cmd
-huggingface-cli login
-```
-
-#### 3. 数据准备
-
-```cmd
-uv run python scripts/prepare_data.py
-```
-
-#### 4. 开始训练
-
-```cmd
 scripts/train_windows.bat
 ```
 
-或者手动运行：
-
-```cmd
-uv run python scripts/train.py --config configs/training_config_windows.yaml
-```
-
-#### 5. 评估模型
-
-```cmd
-uv run python scripts/evaluate.py --model_path ./outputs/checkpoint-final
-```
-
-### 中国网络环境 (推荐)
-
-#### 1. 测试镜像站连接
-
-```cmd
-python scripts/test_mirrors.py
-```
-
-#### 2. 一键训练 (自动选择最佳镜像站)
+#### 中国网络环境
 
 ```cmd
 scripts/train_china.bat
 ```
 
-#### 3. 手动指定镜像站训练
-
-```cmd
-# 使用HF Mirror标准镜像站 (推荐)
-uv run python scripts/train_with_mirror.py --mirror hf_mirror
-
-# 使用ModelScope镜像站
-uv run python scripts/train_with_mirror.py --mirror modelscope
-
-# 使用清华镜像站
-uv run python scripts/train_with_mirror.py --mirror tsinghua
-
-# 自动检测最佳镜像站
-uv run python scripts/train_with_mirror.py --mirror auto
-
-### RTX 4090环境
-
-#### 一键训练 (RTX 4090优化)
+#### RTX 4090环境
 
 ```cmd
 scripts/train_rtx4090.bat
 ```
 
-#### 手动训练 (RTX 4090优化)
-
-```cmd
-uv run python scripts/train_with_mirror.py --config configs/training_config_rtx4090.yaml --mirror hf_mirror
-```
-
 ## 配置说明
 
-主要配置参数在`configs/training_config.yaml`中：
+### 优化配置特性
 
-- `model_name`: 基础模型名称（google/gemma-3-1b-it）
-- `dataset_name`: 数据集名称（shawhin/tool-use-finetuning）
-- `lora_config`: LoRA配置参数
-- `training_args`: 训练参数
+**training_config_optimized.yaml** 包含以下优化：
 
-### Windows优化配置
+- **数据集限制**：限制为1000样本，提高训练效率
+- **序列长度优化**：减少到1024，降低内存占用
+- **学习率调整**：降低到1e-4，提高训练稳定性
+- **训练轮数优化**：减少到2轮，避免过拟合
+- **评估间隔优化**：增加评估间隔，减少计算开销
+- **内存优化**：启用pin_memory，提升数据加载效率
 
-Windows环境使用`configs/training_config_windows.yaml`，主要优化：
+### 主要配置参数
 
- - 较小的batch size（2）以适应Windows内存限制
- - 增加梯度累积步数（8）以保持有效batch size
- - 减少数据加载worker数量（2）
- - 启用梯度检查点以节省内存
+- `model.name`: 基础模型名称
+- `dataset.max_samples`: 数据集大小限制
+- `lora.r`: LoRA rank参数
+- `training.learning_rate`: 学习率
+- `training.num_train_epochs`: 训练轮数
+- `data_processing.max_seq_length`: 最大序列长度
 
-### 中国网络环境配置
+## 评估指标
 
-中国网络环境使用`configs/training_config_china.yaml`，主要特性：
+### 新增工具调用指标
 
- - 自动镜像站检测和选择
- - 支持HF Mirror、ModelScope、清华镜像等国内镜像站
- - 优化的网络连接参数
- - 减少数据集大小以适应网络限制
+- **tool_call_accuracy**: 工具调用准确率
+- **tool_name_accuracy**: 工具名称准确率
+- **tool_args_accuracy**: 工具参数准确率
+- **tool_call_f1**: 工具调用F1分数
+- **exact_match**: 完全匹配率
 
-### RTX 4090优化配置
+### 标准指标
 
-RTX 4090使用`configs/training_config_rtx4090.yaml`，主要优化：
-
- - 更大的batch size（8）充分利用24GB显存
- - 更长的序列长度（2048）提高训练效果
- - 更多的数据集样本（1000）提升模型性能
- - 更高的LoRA rank（16）增强模型表达能力
- - 关闭梯度检查点以提升训练速度
- - 启用pin_memory和更多worker提升数据加载效率
+- **eval_loss**: 验证损失
+- **eval_accuracy**: 验证准确率
 
 ## 技术栈
 
@@ -199,6 +167,27 @@ RTX 4090使用`configs/training_config_rtx4090.yaml`，主要优化：
 - **数据集**: shawhin/tool-use-finetuning
 - **框架**: Transformers, PyTorch
 - **包管理**: UV
+
+## 测试
+
+运行测试套件：
+
+```bash
+uv run pytest tests/ -v
+```
+
+测试覆盖：
+- 工具调用格式验证
+- 数据处理逻辑
+- 配置验证
+- 端到端集成测试
+
+## 性能优化建议
+
+1. **使用优化配置**：优先使用 `training_config_optimized.yaml`
+2. **调整数据集大小**：根据显存限制调整 `max_samples`
+3. **优化序列长度**：根据任务需求调整 `max_seq_length`
+4. **监控资源使用**：使用 `log_system_info()` 监控系统状态
 
 ## 许可证
 

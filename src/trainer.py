@@ -1,10 +1,12 @@
 """
-训练器模块
+训练器模块 - 优化版本
 """
 
 import logging
 import os
-from typing import Dict, Any, Optional
+import json
+import re
+from typing import Dict, Any, Optional, List
 from transformers import Trainer, TrainingArguments
 from peft import PeftModel
 from .utils import get_device_info, create_output_dir
@@ -14,14 +16,84 @@ from .model_config import prepare_model_for_training
 logger = logging.getLogger(__name__)
 
 
+class ToolCallEvaluator:
+    """工具调用评估器"""
+    
+    @staticmethod
+    def extract_tool_calls(text: str) -> List[Dict[str, Any]]:
+        """从文本中提取工具调用"""
+        tool_calls = []
+        pattern = r'<tool_call>(.*?)</tool_call>'
+        matches = re.findall(pattern, text, re.DOTALL)
+        
+        for match in matches:
+            try:
+                lines = match.strip().split('\n')
+                tool_call = {}
+                
+                for line in lines:
+                    if ':' in line:
+                        key, value = line.split(':', 1)
+                        key = key.strip()
+                        value = value.strip()
+                        
+                        if key == 'name':
+                            tool_call['name'] = value
+                        elif key == 'arguments':
+                            tool_call['arguments'] = json.loads(value)
+                        elif key == 'result':
+                            tool_call['result'] = value
+                
+                if 'name' in tool_call and 'arguments' in tool_call:
+                    tool_calls.append(tool_call)
+            except Exception as e:
+                logger.warning(f"解析工具调用失败: {e}")
+        
+        return tool_calls
+    
+    @staticmethod
+    def calculate_tool_call_accuracy(predictions: List[str], targets: List[str]) -> Dict[str, float]:
+        """计算工具调用准确率"""
+        total_samples = len(predictions)
+        if total_samples == 0:
+            return {"tool_call_accuracy": 0.0, "tool_name_accuracy": 0.0, "tool_args_accuracy": 0.0}
+        
+        correct_tool_calls = 0
+        correct_tool_names = 0
+        correct_tool_args = 0
+        
+        for pred, target in zip(predictions, targets):
+            pred_tools = ToolCallEvaluator.extract_tool_calls(pred)
+            target_tools = ToolCallEvaluator.extract_tool_calls(target)
+            
+            # 检查工具调用数量
+            if len(pred_tools) == len(target_tools):
+                correct_tool_calls += 1
+            
+            # 检查工具名称和参数
+            for pred_tool, target_tool in zip(pred_tools, target_tools):
+                if pred_tool.get('name') == target_tool.get('name'):
+                    correct_tool_names += 1
+                
+                if pred_tool.get('arguments') == target_tool.get('arguments'):
+                    correct_tool_args += 1
+        
+        return {
+            "tool_call_accuracy": correct_tool_calls / total_samples,
+            "tool_name_accuracy": correct_tool_names / total_samples,
+            "tool_args_accuracy": correct_tool_args / total_samples
+        }
+
+
 class ToolUseTrainer:
-    """工具调用训练器"""
+    """工具调用训练器 - 优化版本"""
     
     def __init__(self, model, tokenizer, config: Dict[str, Any]):
         self.model = model
         self.tokenizer = tokenizer
         self.config = config
         self.trainer = None
+        self.evaluator = ToolCallEvaluator()
         
         # 准备模型进行训练
         self.model = prepare_model_for_training(self.model)
@@ -34,16 +106,15 @@ class ToolUseTrainer:
         logger.info(f"设备信息: {device_info}")
     
     def create_trainer(self, train_dataset, eval_dataset) -> Trainer:
-        """创建训练器"""
+        """创建训练器 - 优化版本"""
         from .model_config import create_training_arguments
         
         training_args = create_training_arguments(self.config)
         
-        # 添加详细的日志回调
-        from transformers import TrainingArguments
+        # 优化日志配置
         training_args.logging_strategy = "steps"
         training_args.logging_first_step = True
-        training_args.logging_steps = 1  # 每步都打印日志
+        training_args.logging_steps = 10  # 减少日志频率
         
         self.trainer = Trainer(
             model=self.model,
@@ -52,12 +123,13 @@ class ToolUseTrainer:
             eval_dataset=eval_dataset,
             tokenizer=self.tokenizer,
             data_collator=self._data_collator,
+            compute_metrics=self._compute_metrics,
         )
         
         return self.trainer
     
     def _data_collator(self, features):
-        """数据整理器"""
+        """数据整理器 - 优化版本"""
         import torch
         
         batch_size = len(features)
@@ -81,8 +153,51 @@ class ToolUseTrainer:
         
         return batch
     
+    def _compute_metrics(self, eval_pred):
+        """计算评估指标 - 新增工具调用指标"""
+        import torch
+        import numpy as np
+        
+        predictions, labels = eval_pred
+        predictions = np.argmax(predictions, axis=-1)
+        
+        # 计算标准指标
+        metrics = {}
+        
+        # 计算损失
+        loss_fct = torch.nn.CrossEntropyLoss()
+        loss = loss_fct(torch.tensor(predictions), torch.tensor(labels))
+        metrics["eval_loss"] = loss.item()
+        
+        # 计算准确率
+        correct = (predictions == labels).sum()
+        total = labels.size
+        metrics["eval_accuracy"] = correct / total if total > 0 else 0
+        
+        # 计算工具调用指标（如果可能）
+        try:
+            # 解码一些样本进行工具调用分析
+            sample_predictions = []
+            sample_labels = []
+            
+            for i in range(min(10, len(predictions))):
+                pred_text = self.tokenizer.decode(predictions[i], skip_special_tokens=True)
+                label_text = self.tokenizer.decode(labels[i], skip_special_tokens=True)
+                sample_predictions.append(pred_text)
+                sample_labels.append(label_text)
+            
+            tool_metrics = self.evaluator.calculate_tool_call_accuracy(
+                sample_predictions, sample_labels
+            )
+            metrics.update(tool_metrics)
+            
+        except Exception as e:
+            logger.warning(f"计算工具调用指标失败: {e}")
+        
+        return metrics
+    
     def train(self, train_dataset, eval_dataset) -> None:
-        """开始训练"""
+        """开始训练 - 优化版本"""
         logger.info("开始训练...")
         logger.info(f"训练集大小: {len(train_dataset)}")
         logger.info(f"验证集大小: {len(eval_dataset)}")
@@ -96,10 +211,8 @@ class ToolUseTrainer:
         logger.info(f"Batch Size: {trainer.args.per_device_train_batch_size}")
         logger.info(f"梯度累积步数: {trainer.args.gradient_accumulation_steps}")
         logger.info(f"训练轮数: {trainer.args.num_train_epochs}")
-        logger.info(f"总训练步数: {trainer.args.num_train_epochs * len(train_dataset) // (trainer.args.per_device_train_batch_size * trainer.args.gradient_accumulation_steps)}")
         logger.info(f"评估步数: {trainer.args.eval_steps}")
         logger.info(f"保存步数: {trainer.args.save_steps}")
-        logger.info(f"日志步数: {trainer.args.logging_steps}")
         logger.info("==================")
         
         # 开始训练
@@ -119,7 +232,7 @@ class ToolUseTrainer:
         logger.info("训练完成!")
     
     def save_model(self, output_dir: Optional[str] = None) -> None:
-        """保存模型"""
+        """保存模型 - 优化版本"""
         if output_dir is None:
             output_dir = self.config["training"]["output_dir"]
         
@@ -135,10 +248,22 @@ class ToolUseTrainer:
         from .utils import save_config
         save_config(self.config, os.path.join(output_dir, "training_config.yaml"))
         
+        # 保存模型信息
+        model_info = {
+            "model_type": "gemma3-tool-use",
+            "base_model": self.config["model"]["name"],
+            "training_config": self.config,
+            "model_parameters": sum(p.numel() for p in self.model.parameters()),
+            "trainable_parameters": sum(p.numel() for p in self.model.parameters() if p.requires_grad),
+        }
+        
+        with open(os.path.join(output_dir, "model_info.json"), "w", encoding="utf-8") as f:
+            json.dump(model_info, f, indent=2, ensure_ascii=False)
+        
         logger.info("模型保存完成!")
     
     def evaluate(self, eval_dataset) -> Dict[str, float]:
-        """评估模型"""
+        """评估模型 - 优化版本"""
         if self.trainer is None:
             raise ValueError("训练器未初始化，请先调用train()方法")
         
@@ -155,7 +280,7 @@ class ToolUseTrainer:
         return results
     
     def predict(self, text: str, max_length: int = 512) -> str:
-        """使用模型进行预测"""
+        """使用模型进行预测 - 优化版本"""
         import torch
         
         # 编码输入文本

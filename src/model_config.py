@@ -71,8 +71,8 @@ def create_training_arguments(config: Dict[str, Any]) -> TrainingArguments:
         eval_steps=training_config["eval_steps"],
         save_steps=training_config["save_steps"],
         save_total_limit=training_config["save_total_limit"],
-        evaluation_strategy=training_config["evaluation_strategy"],
-        save_strategy=training_config["save_strategy"],
+        eval_strategy=training_config.get("evaluation_strategy", "steps"),  # 修复参数名
+        save_strategy=training_config.get("save_strategy", "steps"),
         load_best_model_at_end=training_config["load_best_model_at_end"],
         metric_for_best_model=training_config["metric_for_best_model"],
         greater_is_better=training_config["greater_is_better"],
