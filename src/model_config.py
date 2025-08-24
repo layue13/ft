@@ -2,6 +2,7 @@
 模型配置模块
 """
 
+import logging
 import torch
 from transformers import (
     AutoModelForCausalLM,
@@ -11,6 +12,8 @@ from transformers import (
 )
 from peft import LoraConfig, get_peft_model, TaskType
 from typing import Dict, Any, Tuple, Optional
+
+logger = logging.getLogger(__name__)
 
 
 def create_quantization_config(config: Dict[str, Any]) -> Optional[BitsAndBytesConfig]:
