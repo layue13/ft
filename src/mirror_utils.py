@@ -33,13 +33,21 @@ class MirrorSelector:
         """获取默认配置"""
         return {
             "mirrors": {
+                "hf_mirror": {
+                    "name": "HF Mirror (标准镜像站)",
+                    "base_url": "https://hf-mirror.com",
+                    "models_path": "",
+                    "datasets_path": "",
+                    "enabled": True,
+                    "priority": 1
+                },
                 "modelscope": {
                     "name": "ModelScope (阿里云)",
                     "base_url": "https://modelscope.cn",
                     "models_path": "/models",
                     "datasets_path": "/datasets",
                     "enabled": True,
-                    "priority": 1
+                    "priority": 2
                 },
                 "huggingface": {
                     "name": "Hugging Face官方",
@@ -47,7 +55,7 @@ class MirrorSelector:
                     "models_path": "",
                     "datasets_path": "",
                     "enabled": True,
-                    "priority": 2
+                    "priority": 3
                 }
             },
             "network_detection": {
@@ -134,7 +142,10 @@ class MirrorSelector:
         models_path = mirror_config.get("models_path", "")
         
         # 处理不同的镜像站URL格式
-        if mirror_name == "modelscope":
+        if mirror_name == "hf_mirror":
+            # HF Mirror格式: https://hf-mirror.com/google/gemma-3-1b-it
+            return f"{base_url}/{model_name}"
+        elif mirror_name == "modelscope":
             # ModelScope格式: https://modelscope.cn/models/google/gemma-3-1b-it
             return f"{base_url}{models_path}/{model_name}"
         elif mirror_name == "tsinghua":
@@ -155,7 +166,10 @@ class MirrorSelector:
         datasets_path = mirror_config.get("datasets_path", "")
         
         # 处理不同的镜像站URL格式
-        if mirror_name == "modelscope":
+        if mirror_name == "hf_mirror":
+            # HF Mirror格式: https://hf-mirror.com/datasets/shawhin/tool-use-finetuning
+            return f"{base_url}/datasets/{dataset_name}"
+        elif mirror_name == "modelscope":
             # ModelScope格式: https://modelscope.cn/datasets/shawhin/tool-use-finetuning
             return f"{base_url}{datasets_path}/{dataset_name}"
         elif mirror_name == "tsinghua":

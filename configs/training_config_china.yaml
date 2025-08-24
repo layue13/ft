@@ -14,7 +14,7 @@ dataset:
 
 # 镜像站配置
 mirror:
-  name: "modelscope"  # 使用ModelScope镜像站
+  name: "hf_mirror"   # 使用HF Mirror标准镜像站
   auto_detect: true   # 自动检测最佳镜像站
 
 lora:

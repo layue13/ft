@@ -34,7 +34,7 @@ def main():
     parser.add_argument(
         "--mirror", 
         type=str, 
-        choices=["modelscope", "tsinghua", "huggingface", "auto"],
+        choices=["hf_mirror", "modelscope", "tsinghua", "huggingface", "auto"],
         default="auto",
         help="指定镜像站 (auto=自动检测)"
     )

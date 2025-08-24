@@ -1,13 +1,22 @@
 # 镜像站配置文件
 mirrors:
   # 主要镜像站配置
+  hf_mirror:
+    name: "HF Mirror (标准镜像站)"
+    base_url: "https://hf-mirror.com"
+    models_path: ""
+    datasets_path: ""
+    enabled: true
+    priority: 1
+    
+  # 备用镜像站
   modelscope:
     name: "ModelScope (阿里云)"
     base_url: "https://modelscope.cn"
     models_path: "/models"
     datasets_path: "/datasets"
     enabled: true
-    priority: 1
+    priority: 2
     
   # 备用镜像站
   tsinghua:
@@ -16,7 +25,7 @@ mirrors:
     models_path: "/hugging-face-models"
     datasets_path: "/hugging-face-models"
     enabled: true
-    priority: 2
+    priority: 3
     
   # 官方源（备用）
   huggingface:
@@ -33,6 +42,7 @@ network_detection:
   timeout: 5  # 秒
   test_urls:
     - "https://huggingface.co"
+    - "https://hf-mirror.com"
     - "https://modelscope.cn"
     - "https://mirrors.tuna.tsinghua.edu.cn"
 

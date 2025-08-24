@@ -128,6 +128,9 @@ scripts/train_china.bat
 #### 3. 手动指定镜像站训练
 
 ```cmd
+# 使用HF Mirror标准镜像站 (推荐)
+uv run python scripts/train_with_mirror.py --mirror hf_mirror
+
 # 使用ModelScope镜像站
 uv run python scripts/train_with_mirror.py --mirror modelscope
 
@@ -161,7 +164,7 @@ Windows环境使用`configs/training_config_windows.yaml`，主要优化：
 中国网络环境使用`configs/training_config_china.yaml`，主要特性：
 
  - 自动镜像站检测和选择
- - 支持ModelScope、清华镜像等国内镜像站
+ - 支持HF Mirror、ModelScope、清华镜像等国内镜像站
  - 优化的网络连接参数
  - 减少数据集大小以适应网络限制
 
