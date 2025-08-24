@@ -78,7 +78,6 @@ def create_training_arguments(config: Dict[str, Any]) -> TrainingArguments:
         greater_is_better=training_config["greater_is_better"],
         fp16=training_config["fp16"],
         dataloader_pin_memory=training_config["dataloader_pin_memory"],
-        remove_unused_columns=training_config["remove_unused_columns"],
         push_to_hub=training_config["push_to_hub"],
         report_to=training_config["report_to"],
         # 额外的优化设置
