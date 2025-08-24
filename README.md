@@ -8,10 +8,12 @@
 
 ## 环境要求
 
-- Python >= 3.9
+- Python >= 3.9, < 3.14 (推荐Python 3.11.6或3.12.0)
 - CUDA兼容的GPU（推荐16GB+显存）
 - UV包管理器
 - Hugging Face账号（需要申请Gemma3-1b-it模型访问权限）
+
+> **注意**: 如果遇到Python版本问题，请参考 [WINDOWS_SETUP.md](WINDOWS_SETUP.md) 获取详细解决方案。
 
 ## 安装
 
