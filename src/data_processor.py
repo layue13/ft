@@ -8,6 +8,7 @@ import re
 from typing import Dict, Any, List, Optional, Tuple
 from datasets import Dataset, load_dataset
 from transformers import PreTrainedTokenizer
+import os
 
 
 logger = logging.getLogger(__name__)
@@ -80,25 +81,25 @@ class ToolUseDataProcessor:
         self.validator = ToolCallValidator()
         self._template_warning_count = 0  # 添加警告计数器
         
-    def load_dataset(self, dataset_name: str, split: str = "train") -> Dataset:
-        """加载数据集"""
+    def load_dataset(self, dataset_name: str, split: str) -> Dataset:
+        """加载数据集 - 优化版本"""
         logger.info(f"正在加载数据集: {dataset_name}, 分割: {split}")
         
-        # 获取镜像站配置
-        mirror_name = self.config.get("mirror", {}).get("name")
-        if mirror_name:
-            from .mirror_utils import get_mirror_selector
-            selector = get_mirror_selector()
-            dataset_url = selector.get_dataset_url(dataset_name, mirror_name)
-            logger.info(f"使用镜像站 {mirror_name} 加载数据集: {dataset_url}")
-        else:
-            dataset_url = dataset_name
-            logger.info(f"使用官方源加载数据集: {dataset_url}")
-        
         try:
-            dataset = load_dataset(dataset_url, split=split)
+            # 首先尝试从本地加载
+            local_path = os.path.join("data", split)
+            if os.path.exists(local_path):
+                logger.info(f"从本地路径加载数据集: {local_path}")
+                dataset = load_dataset("arrow", data_files=os.path.join(local_path, "data-*.arrow"), split=split)
+                logger.info(f"成功加载本地数据集，样本数量: {len(dataset)}")
+                return dataset
+            
+            # 如果本地没有，尝试从Hugging Face加载
+            logger.info(f"使用官方源加载数据集: {dataset_name}")
+            dataset = load_dataset(dataset_name, split=split, trust_remote_code=True)
             logger.info(f"成功加载数据集，样本数量: {len(dataset)}")
             return dataset
+            
         except Exception as e:
             logger.error(f"加载数据集失败: {e}")
             raise
@@ -209,39 +210,35 @@ class ToolUseDataProcessor:
         """分词函数 - 优化版本"""
         texts = []
         
-        for i in range(len(examples.get("query", []))):
+        for i in range(len(examples["query"])):
             query = examples["query"][i]
             trace = examples["trace"][i]
             
-            # 格式化对话
-            gemma_messages = self.format_conversation({"trace": trace})
+            # 将trace转换为对话格式
+            conversation = {"trace": trace}
+            formatted_text = self.format_conversation(conversation)
             
-            # 添加用户查询
-            gemma_messages.append({
-                "role": "user",
-                "content": [{"type": "text", "text": query}]
-            })
-            
-            # 使用Gemma3聊天模板
+            # 应用聊天模板
             try:
-                inputs = self.tokenizer.apply_chat_template(
-                    gemma_messages,
-                    tokenize=True,
-                    return_dict=True,
-                    return_tensors=None,
-                    add_generation_prompt=True,
+                result = self.tokenizer.apply_chat_template(
+                    formatted_text,
+                    tokenize=False,
+                    add_generation_prompt=False
                 )
-                texts.append(inputs)
+                texts.append(result)
             except Exception as e:
-                # 限制警告日志的输出频率
-                self._template_warning_count += 1
-                if self._template_warning_count <= 5:  # 只显示前5个警告
+                # 如果聊天模板失败，使用简单格式
+                if self._template_warning_count < 3:  # 限制警告次数
                     logger.warning(f"聊天模板处理失败，使用简单格式: {e}")
-                elif self._template_warning_count == 6:
-                    logger.warning("聊天模板处理失败次数过多，后续警告将不再显示...")
+                    self._template_warning_count += 1
                 
-                # 回退到简单格式
-                simple_text = f"User: {query}\nAssistant: "
+                # 使用简单格式
+                simple_text = ""
+                for message in formatted_text:
+                    role = message["role"]
+                    content = message["content"]
+                    if content:  # 只添加非空内容
+                        simple_text += f"{role}: {content}\n"
                 texts.append(simple_text)
         
         # 分词处理
@@ -265,12 +262,24 @@ class ToolUseDataProcessor:
         """处理数据集 - 优化版本"""
         logger.info("开始处理数据集...")
         logger.info(f"原始数据集大小: {len(dataset)}")
+        logger.info(f"数据集列名: {dataset.column_names}")
         
         # 移除不需要的列
         remove_columns = self.config["data_processing"].get("remove_columns", [])
         if remove_columns:
-            logger.info(f"移除列: {remove_columns}")
-            dataset = dataset.remove_columns(remove_columns)
+            # 只移除实际存在的列
+            existing_columns = dataset.column_names
+            columns_to_remove = [col for col in remove_columns if col in existing_columns]
+            columns_not_found = [col for col in remove_columns if col not in existing_columns]
+            
+            if columns_not_found:
+                logger.warning(f"以下列在数据集中不存在，将被忽略: {columns_not_found}")
+            
+            if columns_to_remove:
+                logger.info(f"移除列: {columns_to_remove}")
+                dataset = dataset.remove_columns(columns_to_remove)
+            else:
+                logger.info("没有需要移除的列")
         
         # 应用分词
         logger.info("开始分词处理...")

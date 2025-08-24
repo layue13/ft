@@ -47,4 +47,4 @@ training:
 
 data_processing:
   max_seq_length: 1024  # 减少序列长度以提高效率
-  remove_columns: ["id", "conversations"]
+  remove_columns: []  # 暂时不移除任何列，让代码自动处理
