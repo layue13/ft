@@ -55,5 +55,5 @@ training:
 data_processing:
   max_seq_length: 1024  # 减少序列长度
   text_column: "text"
-  remove_columns: ["id", "conversations"]
+  remove_columns: ["query_type", "num_tools_available", "tool_needed", "tool_name"]
   template_format: "tool_use"

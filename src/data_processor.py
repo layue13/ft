@@ -107,41 +107,37 @@ class ToolUseDataProcessor:
     
     def tokenize_function(self, examples: Dict[str, Any]) -> Dict[str, Any]:
         """分词函数"""
-                # 获取文本内容
-        if self.text_column in examples:
-            texts = examples[self.text_column]
-        else:
-            # 处理shawhin/tool-use-finetuning数据集格式
-            texts = []
-            for i in range(len(examples.get("query", []))):
-                # 构建完整的对话文本
-                query = examples["query"][i]
-                trace = examples["trace"][i]
-                
-                # 格式化对话为Gemma3消息格式
-                gemma_messages = self.format_conversation({"trace": trace})
-                
-                # 添加用户查询
-                gemma_messages.append({
-                    "role": "user",
-                    "content": [{"type": "text", "text": query}]
-                })
-                
-                # 使用Gemma3的聊天模板
-                try:
-                    inputs = self.tokenizer.apply_chat_template(
-                        gemma_messages,
-                        tokenize=True,
-                        return_dict=True,
-                        return_tensors=None,
-                        add_generation_prompt=True,
-                    )
-                    texts.append(inputs)
-                except Exception as e:
-                    # 如果聊天模板失败，回退到简单格式
-                    logger.warning(f"聊天模板处理失败，使用简单格式: {e}")
-                    simple_text = f"User: {query}\nAssistant: "
-                    texts.append(simple_text)
+        # 处理shawhin/tool-use-finetuning数据集格式
+        texts = []
+        for i in range(len(examples.get("query", []))):
+            # 构建完整的对话文本
+            query = examples["query"][i]
+            trace = examples["trace"][i]
+            
+            # 格式化对话为Gemma3消息格式
+            gemma_messages = self.format_conversation({"trace": trace})
+            
+            # 添加用户查询
+            gemma_messages.append({
+                "role": "user",
+                "content": [{"type": "text", "text": query}]
+            })
+            
+            # 使用Gemma3的聊天模板
+            try:
+                inputs = self.tokenizer.apply_chat_template(
+                    gemma_messages,
+                    tokenize=True,
+                    return_dict=True,
+                    return_tensors=None,
+                    add_generation_prompt=True,
+                )
+                texts.append(inputs)
+            except Exception as e:
+                # 如果聊天模板失败，回退到简单格式
+                logger.warning(f"聊天模板处理失败，使用简单格式: {e}")
+                simple_text = f"User: {query}\nAssistant: "
+                texts.append(simple_text)
         
         # 分词
         if isinstance(texts[0], dict):
