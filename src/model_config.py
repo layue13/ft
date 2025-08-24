@@ -155,8 +155,16 @@ def load_model_and_tokenizer(
     # 应用LoRA
     model = get_peft_model(model, lora_config)
     
-    # 打印可训练参数
+    # 打印模型信息
+    logger.info("=== 模型信息 ===")
     model.print_trainable_parameters()
+    
+    # 打印模型配置
+    logger.info(f"模型类型: {type(model).__name__}")
+    logger.info(f"模型参数总数: {sum(p.numel() for p in model.parameters()):,}")
+    logger.info(f"可训练参数数: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
+    logger.info(f"LoRA配置: r={lora_config.r}, alpha={lora_config.lora_alpha}, dropout={lora_config.lora_dropout}")
+    logger.info("================")
     
     return model, tokenizer
 

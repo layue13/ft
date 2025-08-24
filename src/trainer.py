@@ -39,6 +39,12 @@ class ToolUseTrainer:
         
         training_args = create_training_arguments(self.config)
         
+        # 添加详细的日志回调
+        from transformers import TrainingArguments
+        training_args.logging_strategy = "steps"
+        training_args.logging_first_step = True
+        training_args.logging_steps = 1  # 每步都打印日志
+        
         self.trainer = Trainer(
             model=self.model,
             args=training_args,
@@ -78,12 +84,34 @@ class ToolUseTrainer:
     def train(self, train_dataset, eval_dataset) -> None:
         """开始训练"""
         logger.info("开始训练...")
+        logger.info(f"训练集大小: {len(train_dataset)}")
+        logger.info(f"验证集大小: {len(eval_dataset)}")
         
         # 创建训练器
         trainer = self.create_trainer(train_dataset, eval_dataset)
         
+        # 打印训练配置
+        logger.info("=== 训练配置 ===")
+        logger.info(f"学习率: {trainer.args.learning_rate}")
+        logger.info(f"Batch Size: {trainer.args.per_device_train_batch_size}")
+        logger.info(f"梯度累积步数: {trainer.args.gradient_accumulation_steps}")
+        logger.info(f"训练轮数: {trainer.args.num_train_epochs}")
+        logger.info(f"总训练步数: {trainer.args.num_train_epochs * len(train_dataset) // (trainer.args.per_device_train_batch_size * trainer.args.gradient_accumulation_steps)}")
+        logger.info(f"评估步数: {trainer.args.eval_steps}")
+        logger.info(f"保存步数: {trainer.args.save_steps}")
+        logger.info(f"日志步数: {trainer.args.logging_steps}")
+        logger.info("==================")
+        
         # 开始训练
-        trainer.train()
+        logger.info("开始模型训练...")
+        train_result = trainer.train()
+        
+        # 打印训练结果
+        logger.info("=== 训练结果 ===")
+        logger.info(f"训练损失: {train_result.training_loss}")
+        logger.info(f"训练步数: {train_result.global_step}")
+        logger.info(f"训练时间: {train_result.metrics.get('train_runtime', 'N/A')} 秒")
+        logger.info("================")
         
         # 保存最终模型
         self.save_model()
@@ -115,10 +143,14 @@ class ToolUseTrainer:
             raise ValueError("训练器未初始化，请先调用train()方法")
         
         logger.info("开始评估...")
+        logger.info(f"评估数据集大小: {len(eval_dataset)}")
         
         results = self.trainer.evaluate(eval_dataset)
         
-        logger.info(f"评估结果: {results}")
+        logger.info("=== 评估结果 ===")
+        for key, value in results.items():
+            logger.info(f"{key}: {value}")
+        logger.info("================")
         
         return results
     

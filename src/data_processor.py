@@ -160,12 +160,17 @@ class ToolUseDataProcessor:
     def process_dataset(self, dataset: Dataset) -> Dataset:
         """处理数据集"""
         logger.info("开始处理数据集...")
+        logger.info(f"原始数据集大小: {len(dataset)}")
+        logger.info(f"原始数据集列名: {dataset.column_names}")
         
         # 移除不需要的列
         if self.remove_columns:
+            logger.info(f"移除列: {self.remove_columns}")
             dataset = dataset.remove_columns(self.remove_columns)
+            logger.info(f"移除列后数据集列名: {dataset.column_names}")
         
         # 应用分词
+        logger.info("开始分词处理...")
         tokenized_dataset = dataset.map(
             self.tokenize_function,
             batched=True,
@@ -174,6 +179,17 @@ class ToolUseDataProcessor:
         )
         
         logger.info(f"数据集处理完成，样本数量: {len(tokenized_dataset)}")
+        logger.info(f"处理后数据集列名: {tokenized_dataset.column_names}")
+        
+        # 打印样本示例
+        if len(tokenized_dataset) > 0:
+            sample = tokenized_dataset[0]
+            logger.info("=== 样本示例 ===")
+            logger.info(f"input_ids长度: {len(sample['input_ids'])}")
+            logger.info(f"attention_mask长度: {len(sample['attention_mask'])}")
+            logger.info(f"labels长度: {len(sample['labels'])}")
+            logger.info("================")
+        
         return tokenized_dataset
     
     def filter_dataset(self, dataset: Dataset, max_samples: Optional[int] = None) -> Dataset:
