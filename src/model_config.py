@@ -93,12 +93,23 @@ def load_model_and_tokenizer(
     """加载模型和分词器"""
     model_name = config["model"]["name"]
     
+    # 获取镜像站配置
+    mirror_name = config.get("mirror", {}).get("name")
+    if mirror_name:
+        from .mirror_utils import get_mirror_selector
+        selector = get_mirror_selector()
+        model_url = selector.get_model_url(model_name, mirror_name)
+        logger.info(f"使用镜像站 {mirror_name} 加载模型: {model_url}")
+    else:
+        model_url = model_name
+        logger.info(f"使用官方源加载模型: {model_url}")
+
     # 创建量化配置
     quantization_config = create_quantization_config(config)
-    
+
     # 加载分词器
     tokenizer = AutoTokenizer.from_pretrained(
-        model_name,
+        model_url,
         trust_remote_code=True,
         padding_side="left",  # Gemma3使用left padding
         use_fast=False,
@@ -124,12 +135,12 @@ def load_model_and_tokenizer(
     if "gemma-3" in model_name:
         from transformers import Gemma3ForConditionalGeneration
         model = Gemma3ForConditionalGeneration.from_pretrained(
-            model_name,
+            model_url,
             **model_kwargs
         )
     else:
         model = AutoModelForCausalLM.from_pretrained(
-            model_name,
+            model_url,
             **model_kwargs
         )
     

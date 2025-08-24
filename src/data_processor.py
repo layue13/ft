@@ -27,8 +27,19 @@ class ToolUseDataProcessor:
         """加载数据集"""
         logger.info(f"正在加载数据集: {dataset_name}, 分割: {split}")
         
+        # 获取镜像站配置
+        mirror_name = self.config.get("mirror", {}).get("name")
+        if mirror_name:
+            from .mirror_utils import get_mirror_selector
+            selector = get_mirror_selector()
+            dataset_url = selector.get_dataset_url(dataset_name, mirror_name)
+            logger.info(f"使用镜像站 {mirror_name} 加载数据集: {dataset_url}")
+        else:
+            dataset_url = dataset_name
+            logger.info(f"使用官方源加载数据集: {dataset_url}")
+        
         try:
-            dataset = load_dataset(dataset_name, split=split)
+            dataset = load_dataset(dataset_url, split=split)
             logger.info(f"成功加载数据集，样本数量: {len(dataset)}")
             return dataset
         except Exception as e:

@@ -14,6 +14,8 @@
 - Hugging Face账号（需要申请Gemma3-1b-it模型访问权限）
 
 > **注意**: 如果遇到Python版本问题，请参考 [WINDOWS_SETUP.md](WINDOWS_SETUP.md) 获取详细解决方案。
+> 
+> **中国用户**: 如果遇到网络连接问题，请使用 `scripts/train_china.bat` 脚本，它会自动选择最佳镜像站。
 
 ## 安装
 
@@ -109,6 +111,33 @@ uv run python scripts/train.py --config configs/training_config_windows.yaml
 uv run python scripts/evaluate.py --model_path ./outputs/checkpoint-final
 ```
 
+### 中国网络环境 (推荐)
+
+#### 1. 测试镜像站连接
+
+```cmd
+python scripts/test_mirrors.py
+```
+
+#### 2. 一键训练 (自动选择最佳镜像站)
+
+```cmd
+scripts/train_china.bat
+```
+
+#### 3. 手动指定镜像站训练
+
+```cmd
+# 使用ModelScope镜像站
+uv run python scripts/train_with_mirror.py --mirror modelscope
+
+# 使用清华镜像站
+uv run python scripts/train_with_mirror.py --mirror tsinghua
+
+# 自动检测最佳镜像站
+uv run python scripts/train_with_mirror.py --mirror auto
+```
+
 ## 配置说明
 
 主要配置参数在`configs/training_config.yaml`中：
@@ -122,10 +151,19 @@ uv run python scripts/evaluate.py --model_path ./outputs/checkpoint-final
 
 Windows环境使用`configs/training_config_windows.yaml`，主要优化：
 
-- 较小的batch size（2）以适应Windows内存限制
-- 增加梯度累积步数（8）以保持有效batch size
-- 减少数据加载worker数量（2）
-- 启用梯度检查点以节省内存
+ - 较小的batch size（2）以适应Windows内存限制
+ - 增加梯度累积步数（8）以保持有效batch size
+ - 减少数据加载worker数量（2）
+ - 启用梯度检查点以节省内存
+
+### 中国网络环境配置
+
+中国网络环境使用`configs/training_config_china.yaml`，主要特性：
+
+ - 自动镜像站检测和选择
+ - 支持ModelScope、清华镜像等国内镜像站
+ - 优化的网络连接参数
+ - 减少数据集大小以适应网络限制
 
 ## 技术栈
 
