@@ -1,22 +1,21 @@
 #!/usr/bin/env python3
 """
-Gemma-3-1b Tool Use 微调脚本 - Hugging Face Jobs版本 (uv支持)
+Gemma-3-1b Tool Use 微调脚本 - HF Jobs版本
 基于第一性原理：模型 + 数据 + 训练循环
 目标：让Gemma-3-1b支持工具调用
 """
 
+import os
+import subprocess
 import torch
 from transformers import (
     AutoModelForCausalLM, AutoTokenizer, 
     TrainingArguments, Trainer, DataCollatorForLanguageModeling
 )
 from peft import LoraConfig, get_peft_model, TaskType
-from datasets import load_dataset
-import warnings
-import os
-import subprocess
-import sys
+from datasets import load_dataset, Dataset
 from huggingface_hub import login
+import warnings
 
 # 忽略警告
 warnings.filterwarnings("ignore", category=FutureWarning, module="datasets")
@@ -87,7 +86,7 @@ def main():
     print("📊 准备训练数据...")
     
     # 加载真实的工具调用数据集
-    dataset = load_dataset("shawhin/tool-use-finetuning", split="train")
+    dataset = load_dataset("shawhin/tool-use-finetuning", split="train[:200]")
     print(f"📦 加载数据集: {len(dataset)} 个样本")
     
     def format_tool_use_data(example):
@@ -144,7 +143,7 @@ def main():
         learning_rate=2e-5,  # 较低学习率避免破坏预训练知识
         warmup_ratio=0.1,
         logging_steps=5,
-        save_strategy="epoch",  # 每个epoch保存
+        save_strategy="epoch",
         save_total_limit=3,
         push_to_hub=True,  # 推送到Hub
         hub_model_id="gemma3-1b-tool-use",  # 指定Hub模型名
@@ -157,7 +156,6 @@ def main():
         load_best_model_at_end=True,  # 加载最佳模型
         metric_for_best_model="loss",  # 使用loss作为指标
         greater_is_better=False,  # loss越小越好
-        evaluation_strategy="epoch",  # 每个epoch评估
     )
     
     # 6. 训练器
