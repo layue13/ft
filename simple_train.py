@@ -16,8 +16,8 @@ from datasets import load_dataset
 def main():
     print("🚀 开始Gemma-3-1b Tool Use微调...")
     
-    # 1. 模型和分词器 - Gemma-3-1b
-    model_name = "google/gemma2-1.1b-it"  # 使用Gemma2-1.1b (更稳定版本)
+    # 1. 模型和分词器 - Gemma-3-1b-it
+    model_name = "google/gemma-3-1b-it"  # 使用正确的Gemma-3-1b模型
     tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side="right")  # Gemma使用right padding
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
