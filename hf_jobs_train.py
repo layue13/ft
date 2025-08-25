@@ -190,14 +190,14 @@ def create_training_arguments():
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
         greater_is_better=False,
-        fp16=True,
-        dataloader_pin_memory=True,
+        fp16=False,  # 禁用fp16避免版本兼容性问题
+        dataloader_pin_memory=False,  # 禁用以提高兼容性
         push_to_hub=True,  # 自动推送到HF Hub
         report_to="none",  # 禁用wandb
         remove_unused_columns=False,
         optim="adamw_torch",
         lr_scheduler_type="cosine",
-        gradient_checkpointing=True,
+        gradient_checkpointing=False,  # 禁用以避免accelerate版本问题
         dataloader_num_workers=0,
     )
 
@@ -207,6 +207,11 @@ def main():
     logger.info("开始HF Jobs云端训练...")
     
     try:
+        # 检查库版本兼容性
+        import transformers
+        import accelerate
+        logger.info(f"Transformers版本: {transformers.__version__}")
+        logger.info(f"Accelerate版本: {accelerate.__version__}")
         # 检查GPU可用性
         device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info(f"使用设备: {device}")
