@@ -24,9 +24,22 @@ warnings.filterwarnings("ignore", category=SyntaxWarning, module="peft")
 warnings.filterwarnings("ignore", category=FutureWarning, module="huggingface_hub")
 warnings.filterwarnings("ignore", category=UserWarning, module="torch.utils.data.dataloader")
 
+def install_uv():
+    """安装uv（如果未安装）"""
+    try:
+        import uv
+        print("✅ uv已安装")
+    except ImportError:
+        print("📦 安装uv...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "uv"])
+        print("✅ uv安装完成")
+
 def setup_environment():
     """设置环境"""
     print("🔧 设置环境...")
+    
+    # 安装uv
+    install_uv()
     
     # 使用uv安装依赖
     print("📦 使用uv安装依赖...")

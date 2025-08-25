@@ -52,6 +52,7 @@ uv run python simple_train.py
 # T4 GPU - 性价比最高
 hf jobs run --flavor t4-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel bash -c "
 apt-get update && apt-get install -y git &&
+pip install uv &&
 git clone https://github.com/layue13/ft.git &&
 cd ft &&
 uv sync &&
@@ -61,6 +62,7 @@ uv run python hf_jobs_train.py
 # L4 GPU - 中等性能
 hf jobs run --flavor l4x1 --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel bash -c "
 apt-get update && apt-get install -y git &&
+pip install uv &&
 git clone https://github.com/layue13/ft.git &&
 cd ft &&
 uv sync &&
@@ -73,6 +75,7 @@ uv run python hf_jobs_train.py
 # A10G GPU - 平衡性能
 hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel bash -c "
 apt-get update && apt-get install -y git &&
+pip install uv &&
 git clone https://github.com/layue13/ft.git &&
 cd ft &&
 uv sync &&
@@ -82,6 +85,7 @@ uv run python hf_jobs_train.py
 # A100 GPU - 最高性能
 hf jobs run --flavor a100-large --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel bash -c "
 apt-get update && apt-get install -y git &&
+pip install uv &&
 git clone https://github.com/layue13/ft.git &&
 cd ft &&
 uv sync &&
@@ -94,6 +98,7 @@ uv run python hf_jobs_train.py
 # CPU训练 - 最便宜但较慢
 hf jobs run --flavor cpu-upgrade --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel bash -c "
 apt-get update && apt-get install -y git &&
+pip install uv &&
 git clone https://github.com/layue13/ft.git &&
 cd ft &&
 uv sync &&
