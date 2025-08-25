@@ -153,6 +153,7 @@ def main():
         bf16=bf16_supported,
         gradient_checkpointing=True,  # 启用梯度检查点
         dataloader_pin_memory=True,  # 启用pin_memory
+        evaluation_strategy="epoch",  # 每个epoch评估
         load_best_model_at_end=True,  # 加载最佳模型
         metric_for_best_model="loss",  # 使用loss作为指标
         greater_is_better=False,  # loss越小越好
