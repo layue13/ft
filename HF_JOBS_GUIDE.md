@@ -45,14 +45,14 @@ uv run hf jobs ps
 ```bash
 # 正确的命令格式（本地运行，云端执行）
 # 方式1: 单行命令（推荐，避免换行问题）
-uv run hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel -- bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && pip install 'transformers>=4.40.0,<4.46.0' 'accelerate>=0.20.0,<0.35.0' && uv run python hf_jobs_train.py"
+uv run hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel -- bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && pip install 'transformers==4.44.2' 'accelerate==0.33.0' datasets peft torch && uv run python hf_jobs_train.py"
 
 # 方式2: 多行命令（如果终端支持）
 uv run hf jobs run \
     --flavor a10g-small \
     --secrets HF_TOKEN \
     pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel \
-    -- bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && pip install 'transformers>=4.40.0,<4.46.0' 'accelerate>=0.20.0,<0.35.0' && uv run python hf_jobs_train.py"
+    -- bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && pip install 'transformers==4.44.2' 'accelerate==0.33.0' datasets peft torch && uv run python hf_jobs_train.py"
 
 # 🚀 最佳选择：使用HF Jobs的uv支持
 uv run hf jobs uv --flavor a10g-small \
@@ -81,7 +81,7 @@ uv run hf jobs uv --flavor a10g-small \
     "
 
 # 方式3: 传统单行方式（确保正确格式）
-uv run hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel -- bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && pip install 'transformers>=4.40.0,<4.46.0' 'accelerate>=0.20.0,<0.35.0' && uv run python hf_jobs_train.py"
+uv run hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel -- bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && pip install 'transformers==4.44.2' 'accelerate==0.33.0' datasets peft torch && uv run python hf_jobs_train.py"
 ```
 
 ### 4. 监控任务
@@ -159,7 +159,7 @@ hf jobs run --flavor a10g-small \
    **原因**: 多行命令在某些终端中被错误解析
    **解决方案**: 使用单行命令格式:
    ```bash
-   uv run hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel -- bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && pip install 'transformers>=4.40.0,<4.46.0' 'accelerate>=0.20.0,<0.35.0' && uv run python hf_jobs_train.py"
+   uv run hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel -- bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && pip install 'transformers==4.44.2' 'accelerate==0.33.0' datasets peft torch && uv run python hf_jobs_train.py"
    ```
 
 1c. **库版本兼容性错误** 🔧
@@ -167,7 +167,11 @@ hf jobs run --flavor a10g-small \
    TypeError: Accelerator.unwrap_model() got an unexpected keyword argument 'keep_torch_compile'
    ```
    **原因**: transformers和accelerate版本不兼容
-   **解决方案**: 命令中已添加兼容版本限制，训练参数也已优化
+   **解决方案**: 使用具体的兼容版本:
+   - transformers==4.44.2
+   - accelerate==0.33.0
+   
+   **更新后的命令**: 见上方命令示例
 
 2. **认证失败**
    ```bash
