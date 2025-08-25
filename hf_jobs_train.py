@@ -185,7 +185,7 @@ def create_training_arguments():
         eval_steps=100,
         save_steps=100,
         save_total_limit=2,
-        evaluation_strategy="steps",
+        eval_strategy="steps",
         save_strategy="steps",
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
