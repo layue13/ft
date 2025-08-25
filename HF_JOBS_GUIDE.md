@@ -44,6 +44,10 @@ uv run hf jobs ps
 
 ```bash
 # 正确的命令格式（本地运行，云端执行）
+# 方式1: 单行命令（推荐，避免换行问题）
+uv run hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel -- bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && uv run python hf_jobs_train.py"
+
+# 方式2: 多行命令（如果终端支持）
 uv run hf jobs run \
     --flavor a10g-small \
     --secrets HF_TOKEN \
@@ -76,9 +80,8 @@ uv run hf jobs uv --flavor a10g-small \
     subprocess.run(['python', 'ft/hf_jobs_train.py'], check=True)
     "
 
-# 或者传统方式（已修复git问题）
-uv run hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel \
-    -- bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && uv run python hf_jobs_train.py"
+# 方式3: 传统单行方式（确保正确格式）
+uv run hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel -- bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && uv run python hf_jobs_train.py"
 ```
 
 ### 4. 监控任务
@@ -150,11 +153,14 @@ hf jobs run --flavor a10g-small \
 
 1b. **命令解析错误** 🔧
    ```
-   fatal: You must specify a repository to clone.
-   bash: line 2: https://github.com/layue13/ft.git: No such file or directory
+   usage: hf <command> [<args>] jobs run: error: the following arguments are required: image
+   zsh: no such file or directory: pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel
    ```
-   **原因**: 缺少 `--` 分隔符导致命令被错误解析
-   **解决方案**: 确保在Docker镜像和命令之间添加 `--`
+   **原因**: 多行命令在某些终端中被错误解析
+   **解决方案**: 使用单行命令格式:
+   ```bash
+   uv run hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel -- bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && uv run python hf_jobs_train.py"
+   ```
 
 2. **认证失败**
    ```bash
