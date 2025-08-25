@@ -157,7 +157,7 @@ def main():
         learning_rate=2e-5,  # 较低学习率避免破坏预训练知识
         warmup_ratio=0.1,
         logging_steps=5,
-        save_strategy="epoch",
+        save_strategy="epoch",  # 每个epoch保存
         save_total_limit=3,
         push_to_hub=True,  # 推送到Hub
         hub_model_id="gemma3-1b-tool-use",  # 指定Hub模型名
@@ -171,7 +171,6 @@ def main():
         metric_for_best_model="loss",  # 使用loss作为指标
         greater_is_better=False,  # loss越小越好
         evaluation_strategy="epoch",  # 每个epoch评估
-        save_strategy="epoch",  # 每个epoch保存
     )
     
     # 6. 训练器
