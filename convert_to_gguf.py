@@ -26,10 +26,54 @@ def check_dependencies():
     
     return True
 
+def check_llama_cpp():
+    """检查llama-cpp-python是否已安装"""
+    try:
+        import llama_cpp
+        print("✅ llama-cpp-python已安装")
+        return True
+    except ImportError:
+        print("❌ llama-cpp-python未安装")
+        return False
+
+def install_llama_cpp_simple():
+    """简单安装llama-cpp-python"""
+    print("📦 安装llama-cpp-python...")
+    
+    # 尝试多种安装方式
+    install_methods = [
+        # 方式1: uv安装
+        (["uv", "add", "llama-cpp-python"], "uv"),
+        # 方式2: pip安装
+        ([sys.executable, "-m", "pip", "install", "llama-cpp-python"], "pip"),
+    ]
+    
+    for cmd, method in install_methods:
+        try:
+            print(f"🔧 尝试使用{method}安装...")
+            subprocess.run(cmd, check=True)
+            print(f"✅ {method}安装成功")
+            return True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            print(f"❌ {method}安装失败")
+            continue
+    
+    print("❌ 所有安装方式都失败")
+    return False
+
 def install_llama_cpp():
     """安装llama.cpp - 支持多种方式"""
     print("📦 安装llama.cpp...")
     
+    # 首先检查是否已经安装
+    if check_llama_cpp():
+        return True
+    
+    # 尝试简单安装
+    if install_llama_cpp_simple():
+        return True
+    
+    # 如果简单安装失败，尝试从源码安装
     if os.path.exists("llama.cpp"):
         print("✅ llama.cpp已存在，跳过下载")
         return True
@@ -68,26 +112,9 @@ def install_llama_cpp():
                 subprocess.run(["make"], check=True)
                 print("✅ Make构建成功")
             except subprocess.CalledProcessError:
-                print("⚠️ Make构建也失败，尝试使用预编译版本...")
-                
-                # 方法3: 使用预编译版本
-                system = platform.system().lower()
-                machine = platform.machine().lower()
-                
-                if system == "darwin" and machine in ["x86_64", "arm64"]:
-                    print("🍎 检测到macOS，使用预编译版本...")
-                    # 对于macOS，我们可以使用pip安装
-                    os.chdir("..")
-                    try:
-                        subprocess.run([sys.executable, "-m", "pip", "install", "llama-cpp-python"], check=True)
-                        print("✅ 已安装llama-cpp-python")
-                        return True
-                    except subprocess.CalledProcessError:
-                        print("❌ pip安装失败")
-                        return False
-                else:
-                    print("❌ 不支持的系统架构，请手动安装llama.cpp")
-                    return False
+                print("⚠️ Make构建也失败")
+                os.chdir("..")
+                return False
         
         os.chdir("..")
         return True
@@ -114,6 +141,7 @@ def convert_to_gguf(model_path, output_file, quantization="q4_k_m"):
             return convert_with_transformers(model_path, output_file, quantization)
         except ImportError:
             print("❌ 未找到llama-cpp-python，请先安装")
+            print("💡 建议运行: uv add llama-cpp-python")
             return False
     
     if not os.path.exists(convert_script):
@@ -245,14 +273,16 @@ def main():
         print("\n❌ 依赖检查失败，请安装git")
         return
     
-    # 2. 安装llama.cpp
-    if not install_llama_cpp():
-        print("\n❌ llama.cpp安装失败")
-        print("\n💡 手动安装选项:")
-        print("1. 安装llama-cpp-python: pip install llama-cpp-python")
-        print("2. 手动编译llama.cpp: https://github.com/ggml-org/llama.cpp")
-        print("3. 使用预编译版本")
-        return
+    # 2. 检查llama-cpp-python
+    if not check_llama_cpp():
+        print("\n📦 需要安装llama-cpp-python...")
+        if not install_llama_cpp():
+            print("\n❌ llama.cpp安装失败")
+            print("\n💡 手动安装选项:")
+            print("1. 使用uv: uv add llama-cpp-python")
+            print("2. 使用pip: pip install llama-cpp-python")
+            print("3. 运行安装脚本: python install_llama_cpp.py")
+            return
     
     # 3. 获取输入
     print("\n📝 配置转换参数:")
