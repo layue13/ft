@@ -22,20 +22,30 @@ def create_quantization_config(config: Dict[str, Any]) -> Optional[BitsAndBytesC
     
     # 在macOS上跳过量化
     if platform.system() == "Darwin":
+        logger.info("在macOS上跳过量化配置")
         return None
     
     try:
         import bitsandbytes
         model_config = config["model"]
         
+        # 检查是否启用量化
+        if not model_config.get("use_4bit", False):
+            logger.info("量化已禁用")
+            return None
+            
+        logger.info("创建4bit量化配置")
         return BitsAndBytesConfig(
-            load_in_4bit=model_config.get("use_4bit", True),
+            load_in_4bit=True,
             bnb_4bit_use_double_quant=model_config.get("use_nested_quant", True),
             bnb_4bit_quant_type="nf4",
             bnb_4bit_compute_dtype=getattr(torch, model_config.get("bnb_4bit_compute_dtype", "bfloat16"))
         )
-    except ImportError:
-        # 如果没有安装bitsandbytes，返回None
+    except ImportError as e:
+        logger.warning(f"bitsandbytes不可用，跳过量化: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"创建量化配置时出错: {e}")
         return None
 
 
@@ -81,12 +91,12 @@ def create_training_arguments(config: Dict[str, Any]) -> TrainingArguments:
         push_to_hub=training_config["push_to_hub"],
         report_to=training_config["report_to"],
         # 额外的优化设置
-        optim="paged_adamw_8bit",
+        optim="adamw_torch",  # 使用更兼容的优化器
         lr_scheduler_type="cosine",
         gradient_checkpointing=True,
-        dataloader_num_workers=4,
+        dataloader_num_workers=0,  # 避免多进程问题
         group_by_length=True,
-        # Gemma3特定设置
+        # 通用设置
         remove_unused_columns=False,
     )
 
@@ -135,24 +145,30 @@ def load_model_and_tokenizer(
     if quantization_config is not None:
         model_kwargs["quantization_config"] = quantization_config
     
-    # 对于Gemma3-1b-it，使用Gemma3ForConditionalGeneration
-    if "gemma-3" in model_name:
-        from transformers import Gemma3ForConditionalGeneration
-        model = Gemma3ForConditionalGeneration.from_pretrained(
-            model_url,
-            **model_kwargs
-        )
-    else:
-        model = AutoModelForCausalLM.from_pretrained(
-            model_url,
-            **model_kwargs
-        )
+    # 使用AutoModelForCausalLM来避免量化兼容性问题
+    model = AutoModelForCausalLM.from_pretrained(
+        model_url,
+        **model_kwargs
+    )
     
     # 创建LoRA配置
     lora_config = create_lora_config(config)
     
     # 应用LoRA
-    model = get_peft_model(model, lora_config)
+    try:
+        logger.info("应用LoRA配置...")
+        model = get_peft_model(model, lora_config)
+    except Exception as e:
+        logger.error(f"应用LoRA时发生错误: {e}")
+        logger.info("尝试禁用量化并重新加载...")
+        
+        # 重新加载模型，不使用量化
+        model_kwargs_no_quant = {k: v for k, v in model_kwargs.items() if k != "quantization_config"}
+        model = AutoModelForCausalLM.from_pretrained(
+            model_url,
+            **model_kwargs_no_quant
+        )
+        model = get_peft_model(model, lora_config)
     
     # 打印模型信息
     logger.info("=== 模型信息 ===")
