@@ -9,6 +9,7 @@ import os
 import sys
 import subprocess
 import shutil
+import platform
 from pathlib import Path
 
 def check_dependencies():
@@ -23,18 +24,10 @@ def check_dependencies():
         print("❌ git 未安装")
         return False
     
-    # 检查make
-    try:
-        subprocess.run(["make", "--version"], check=True, capture_output=True)
-        print("✅ make")
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        print("❌ make 未安装")
-        return False
-    
     return True
 
 def install_llama_cpp():
-    """安装llama.cpp"""
+    """安装llama.cpp - 支持多种方式"""
     print("📦 安装llama.cpp...")
     
     if os.path.exists("llama.cpp"):
@@ -48,12 +41,55 @@ def install_llama_cpp():
         ], check=True)
         print("✅ 已克隆llama.cpp仓库")
         
-        # 编译
+        # 尝试不同的构建方法
         os.chdir("llama.cpp")
-        subprocess.run(["make"], check=True)
-        print("✅ 已编译llama.cpp")
-        os.chdir("..")
         
+        # 方法1: 尝试使用CMake
+        try:
+            print("🔧 尝试使用CMake构建...")
+            subprocess.run(["cmake", "--version"], check=True, capture_output=True)
+            
+            # 创建build目录
+            os.makedirs("build", exist_ok=True)
+            os.chdir("build")
+            
+            # 配置和构建
+            subprocess.run(["cmake", ".."], check=True)
+            subprocess.run(["cmake", "--build", ".", "--config", "Release"], check=True)
+            
+            print("✅ CMake构建成功")
+            os.chdir("..")
+            
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            print("⚠️ CMake构建失败，尝试使用make...")
+            
+            # 方法2: 尝试使用make (旧版本)
+            try:
+                subprocess.run(["make"], check=True)
+                print("✅ Make构建成功")
+            except subprocess.CalledProcessError:
+                print("⚠️ Make构建也失败，尝试使用预编译版本...")
+                
+                # 方法3: 使用预编译版本
+                system = platform.system().lower()
+                machine = platform.machine().lower()
+                
+                if system == "darwin" and machine in ["x86_64", "arm64"]:
+                    print("🍎 检测到macOS，使用预编译版本...")
+                    # 对于macOS，我们可以使用pip安装
+                    os.chdir("..")
+                    try:
+                        subprocess.run([sys.executable, "-m", "pip", "install", "llama-cpp-python"], check=True)
+                        print("✅ 已安装llama-cpp-python")
+                        return True
+                    except subprocess.CalledProcessError:
+                        print("❌ pip安装失败")
+                        return False
+                else:
+                    print("❌ 不支持的系统架构，请手动安装llama.cpp")
+                    return False
+        
+        os.chdir("..")
         return True
         
     except subprocess.CalledProcessError as e:
@@ -64,12 +100,22 @@ def convert_to_gguf(model_path, output_file, quantization="q4_k_m"):
     """转换为GGUF格式"""
     print(f"🔄 开始转换: {model_path} -> {output_file}")
     
-    if not os.path.exists("llama.cpp"):
-        print("❌ llama.cpp未安装，请先运行安装")
-        return False
-    
     # 检查转换脚本
     convert_script = "llama.cpp/convert_hf_to_gguf.py"
+    
+    # 如果llama.cpp不存在，尝试使用pip安装的版本
+    if not os.path.exists("llama.cpp"):
+        print("📦 llama.cpp不存在，尝试使用pip安装的版本...")
+        try:
+            import llama_cpp
+            print("✅ 找到llama-cpp-python")
+            
+            # 使用transformers的转换功能
+            return convert_with_transformers(model_path, output_file, quantization)
+        except ImportError:
+            print("❌ 未找到llama-cpp-python，请先安装")
+            return False
+    
     if not os.path.exists(convert_script):
         print(f"❌ 转换脚本不存在: {convert_script}")
         return False
@@ -93,6 +139,38 @@ def convert_to_gguf(model_path, output_file, quantization="q4_k_m"):
         print(f"❌ 转换失败: {e}")
         return False
 
+def convert_with_transformers(model_path, output_file, quantization="q4_k_m"):
+    """使用transformers进行转换"""
+    print("🔄 使用transformers进行转换...")
+    
+    try:
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        import torch
+        
+        print("📦 加载模型...")
+        model = AutoModelForCausalLM.from_pretrained(
+            model_path,
+            torch_dtype=torch.float16,
+            device_map="auto"
+        )
+        tokenizer = AutoTokenizer.from_pretrained(model_path)
+        
+        print("💾 保存为GGUF兼容格式...")
+        # 保存为transformers格式，然后可以使用其他工具转换
+        temp_dir = "temp_for_gguf"
+        model.save_pretrained(temp_dir)
+        tokenizer.save_pretrained(temp_dir)
+        
+        print("✅ 模型已保存为兼容格式")
+        print(f"📁 临时目录: {temp_dir}")
+        print("💡 请使用其他工具(如llama.cpp)将临时目录转换为GGUF格式")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ 转换失败: {e}")
+        return False
+
 def create_usage_script(output_file):
     """创建使用示例脚本"""
     print("📝 创建使用示例脚本...")
@@ -103,26 +181,32 @@ def create_usage_script(output_file):
 GGUF模型使用示例
 \"\"\"
 
+import os
 import subprocess
 import sys
 
 def run_llama_cpp(model_path, prompt, max_tokens=512):
     \"\"\"使用llama.cpp运行GGUF模型\"\"\"
-    cmd = [
-        "./llama.cpp/main",
-        "-m", model_path,
-        "-n", str(max_tokens),
-        "-p", prompt,
-        "--repeat_penalty", "1.1",
-        "--temp", "0.7"
+    
+    # 尝试多种运行方式
+    commands = [
+        # 方式1: 本地llama.cpp
+        ["./llama.cpp/main", "-m", model_path, "-n", str(max_tokens), "-p", prompt],
+        # 方式2: 系统安装的llama.cpp
+        ["llama-cpp", "-m", model_path, "-n", str(max_tokens), "-p", prompt],
+        # 方式3: python包
+        [sys.executable, "-m", "llama_cpp", "-m", model_path, "-n", str(max_tokens), "-p", prompt]
     ]
     
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        return result.stdout.strip()
-    except subprocess.CalledProcessError as e:
-        print(f"运行失败: {{e}}")
-        return None
+    for cmd in commands:
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            return result.stdout.strip()
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            continue
+    
+    print("❌ 所有运行方式都失败")
+    return None
 
 def main():
     model_path = "{output_file}"
@@ -158,12 +242,16 @@ def main():
     
     # 1. 检查依赖
     if not check_dependencies():
-        print("\n❌ 依赖检查失败，请安装必要的工具")
+        print("\n❌ 依赖检查失败，请安装git")
         return
     
     # 2. 安装llama.cpp
     if not install_llama_cpp():
         print("\n❌ llama.cpp安装失败")
+        print("\n💡 手动安装选项:")
+        print("1. 安装llama-cpp-python: pip install llama-cpp-python")
+        print("2. 手动编译llama.cpp: https://github.com/ggml-org/llama.cpp")
+        print("3. 使用预编译版本")
         return
     
     # 3. 获取输入

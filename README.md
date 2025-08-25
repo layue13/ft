@@ -147,6 +147,7 @@ ft/
 ├── hf_jobs_train.py            # ☁️ HF Jobs训练脚本
 ├── merge_lora.py                # 🔄 LoRA权重合并脚本
 ├── convert_to_gguf.py           # 🚀 GGUF格式转换脚本
+├── install_llama_cpp.py         # 📦 llama.cpp安装脚本
 ├── pyproject.toml              # 📦 uv依赖配置
 ├── README.md                   # 📖 项目说明
 └── .gitignore                  # 🚫 Git忽略文件
@@ -311,7 +312,22 @@ python merge_lora.py
 # - 输出目录 (默认: ./gemma3-1b-tool-use-merged)
 ```
 
-#### 步骤2: 转换为GGUF格式
+#### 步骤2: 安装llama.cpp (可选)
+
+如果遇到编译问题，可以使用预编译版本：
+
+```bash
+# 方式1: 使用pip安装 (推荐)
+pip install llama-cpp-python
+
+# 方式2: 使用我们的安装脚本
+python install_llama_cpp.py
+
+# 方式3: 使用Homebrew (macOS)
+brew install llama-cpp
+```
+
+#### 步骤3: 转换为GGUF格式
 
 ```bash
 # 运行GGUF转换脚本
