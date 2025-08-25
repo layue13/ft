@@ -71,13 +71,24 @@ def convert_to_gguf(model_path, output_file, quantization="q4_k_m"):
         return False
     
     # 检查是否包含必要的文件
-    required_files = ["config.json", "pytorch_model.bin", "tokenizer.json"]
+    required_files = ["config.json", "tokenizer.json"]
+    # 检查模型文件（支持多种格式）
+    model_files = ["pytorch_model.bin", "model.safetensors"]
+    has_model_file = any(os.path.exists(os.path.join(model_path, f)) for f in model_files)
+    
     missing_files = [f for f in required_files if not os.path.exists(os.path.join(model_path, f))]
     
     if missing_files:
         print(f"❌ 源模型缺少必要文件: {missing_files}")
         print("💡 请先运行 merge_lora.py 合并LoRA权重")
         return False
+    
+    if not has_model_file:
+        print(f"❌ 源模型缺少模型文件，需要以下之一: {model_files}")
+        print("💡 请先运行 merge_lora.py 合并LoRA权重")
+        return False
+    
+    print("✅ 模型文件检查通过")
     
     try:
         # 使用ctransformers转换
