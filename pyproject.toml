@@ -9,10 +9,11 @@ readme = "README.md"
 requires-python = ">=3.9,<3.14"
 dependencies = [
     "torch>=2.2.0",
-    "transformers>=4.40.0",
-    "peft>=0.7.0",
+    "transformers>=4.40.0",  # 更新到支持Gemma的版本
+    "peft>=0.7.1",  # 兼容版本
     "datasets>=2.14.0",
-    "accelerate>=0.20.0",
+    "accelerate>=0.26.0",  # 更新到满足transformers要求
+    "tokenizers>=0.15.0",  # 固定tokenizers版本
     "tqdm>=4.65.0",
     "wandb>=0.15.0",
     "numpy>=1.24.0",

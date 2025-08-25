@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Gemma-3-1b Tool Use 微调脚本
+Gemma-3-1b Tool Use 微调脚本 - Hugging Face Jobs版本 (uv支持)
 基于第一性原理：模型 + 数据 + 训练循环
 目标：让Gemma-3-1b支持工具调用
 """
@@ -11,8 +11,12 @@ from transformers import (
     TrainingArguments, Trainer, DataCollatorForLanguageModeling
 )
 from peft import LoraConfig, get_peft_model, TaskType
-from datasets import load_dataset, Dataset
+from datasets import load_dataset
 import warnings
+import os
+import subprocess
+import sys
+from huggingface_hub import login
 
 # 忽略警告
 warnings.filterwarnings("ignore", category=FutureWarning, module="datasets")
@@ -20,8 +24,37 @@ warnings.filterwarnings("ignore", category=SyntaxWarning, module="peft")
 warnings.filterwarnings("ignore", category=FutureWarning, module="huggingface_hub")
 warnings.filterwarnings("ignore", category=UserWarning, module="torch.utils.data.dataloader")
 
+def install_uv():
+    """安装uv（如果未安装）"""
+    try:
+        import uv
+        print("✅ uv已安装")
+    except ImportError:
+        print("📦 安装uv...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "uv"])
+        print("✅ uv安装完成")
+
+def setup_environment():
+    """设置环境"""
+    print("🔧 设置环境...")
+    
+    # 安装uv
+    install_uv()
+    
+    # 使用uv安装依赖
+    print("📦 使用uv安装依赖...")
+    subprocess.check_call(["uv", "sync"])
+
 def main():
-    print("🚀 开始Gemma-3-1b Tool Use微调...")
+    print("🚀 开始Gemma-3-1b Tool Use微调 (HF Jobs版本 - uv支持)...")
+    
+    # 设置环境
+    setup_environment()
+    
+    # 登录Hugging Face
+    if os.getenv("HF_TOKEN"):
+        login(token=os.getenv("HF_TOKEN"))
+        print("✅ 已登录Hugging Face")
     
     # 检查设备支持
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -67,7 +100,7 @@ def main():
     print("📊 准备训练数据...")
     
     # 加载真实的工具调用数据集
-    dataset = load_dataset("shawhin/tool-use-finetuning", split="train[:200]")
+    dataset = load_dataset("shawhin/tool-use-finetuning", split="train")
     print(f"📦 加载数据集: {len(dataset)} 个样本")
     
     def format_tool_use_data(example):
@@ -115,24 +148,30 @@ def main():
         mlm=False,  # 使用因果语言建模
     )
     
-    # 5. 训练参数 - Gemma优化，根据设备调整
+    # 5. 训练参数 - HF Jobs优化
     training_args = TrainingArguments(
         output_dir="./gemma3-tool-use",
-        num_train_epochs=2,  # Gemma需要更多训练
-        per_device_train_batch_size=1,  # Gemma模型较大
-        gradient_accumulation_steps=4,  # 通过梯度累积增加有效batch size
+        num_train_epochs=3,  # 增加训练轮数
+        per_device_train_batch_size=2,  # 增加batch size
+        gradient_accumulation_steps=8,  # 增加梯度累积
         learning_rate=2e-5,  # 较低学习率避免破坏预训练知识
         warmup_ratio=0.1,
-        logging_steps=10,
+        logging_steps=5,
         save_strategy="epoch",
-        save_total_limit=2,
-        push_to_hub=False,  # 暂时不上传
-        report_to="none",
+        save_total_limit=3,
+        push_to_hub=True,  # 推送到Hub
+        hub_model_id="gemma3-1b-tool-use",  # 指定Hub模型名
+        report_to="wandb",  # 使用wandb记录
         remove_unused_columns=False,
-        dataloader_num_workers=0,
+        dataloader_num_workers=2,  # 增加数据加载器工作进程
         bf16=bf16_supported,
-        gradient_checkpointing=device == "cuda",
-        dataloader_pin_memory=False if device == "cpu" else True,  # CPU上禁用dataloader pin_memory
+        gradient_checkpointing=True,  # 启用梯度检查点
+        dataloader_pin_memory=True,  # 启用pin_memory
+        load_best_model_at_end=True,  # 加载最佳模型
+        metric_for_best_model="loss",  # 使用loss作为指标
+        greater_is_better=False,  # loss越小越好
+        evaluation_strategy="epoch",  # 每个epoch评估
+        save_strategy="epoch",  # 每个epoch保存
     )
     
     # 6. 训练器
@@ -156,6 +195,11 @@ def main():
     # 8. 保存最终模型
     trainer.save_model()
     tokenizer.save_pretrained("./gemma3-tool-use")
+    
+    # 9. 推送到Hub
+    if os.getenv("HF_TOKEN"):
+        trainer.push_to_hub()
+        print("📤 模型已推送到Hugging Face Hub")
     
     print("🎉 Gemma-3-1b Tool Use微调完成！")
     print("💾 模型已保存到 ./gemma3-tool-use")

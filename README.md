@@ -1,67 +1,128 @@
-# 🚀 极简AI微调项目
+# Gemma-3-1b Tool Use 微调项目
 
-**第一性原理**：用最少的代码，最简的方式，完成AI模型微调。
+基于第一性原理的Gemma-3-1b工具调用微调项目，让模型学会使用工具。
 
-## 🎯 核心理念
+## 🎯 项目目标
 
-- ✨ **极简至上**：一个文件包含所有训练逻辑
-- 🚀 **开箱即用**：无复杂配置，无多层架构
-- ☁️ **云端优先**：直接在HF Jobs上运行
-- 💰 **成本友好**：2-3分钟训练，成本 ≈ $0.10
+- 微调Gemma-3-1b模型以支持工具调用
+- 使用真实的工具调用数据集进行训练
+- 基于LoRA技术进行高效微调
+- **使用uv进行依赖管理**
 
-## ⚡ 两种运行方式
+## 📦 依赖管理
 
-### 方式A：内联脚本（推荐）
+本项目使用 `uv` 进行依赖管理：
+
 ```bash
-hf jobs uv --flavor a10g-small --secrets HF_TOKEN --script "
-# /// script  
-# dependencies = ['transformers', 'datasets', 'peft', 'torch', 'accelerate']
-# ///
-# 完整训练代码内联在这里
+# 安装依赖
+uv sync
+
+# 运行训练脚本
+uv run python simple_train.py
+```
+
+## 🚀 快速开始
+
+### 本地训练
+
+1. 克隆项目
+```bash
+git clone https://github.com/layue13/ft.git
+cd ft
+```
+
+2. 安装依赖
+```bash
+uv sync
+```
+
+3. 运行训练
+```bash
+uv run python simple_train.py
+```
+
+### 云端训练 (HF Jobs)
+
+```bash
+# 一键部署到HF Jobs
+hf jobs run --flavor a100-40gb --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel bash -c "
+pip install uv &&
+git clone https://github.com/layue13/ft.git &&
+cd ft &&
+uv sync &&
+uv run python hf_jobs_train.py
 "
 ```
 
-### 方式B：极简脚本
-```bash
-hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel bash -c "git clone https://github.com/layue13/ft.git && cd ft && python simple_train.py"
-```
+## 📊 项目特性
 
-详细命令见 `HF_JOBS_GUIDE.md`
+| 特性 | 说明 |
+|------|------|
+| **模型** | google/gemma-3-1b-it |
+| **数据集** | shawhin/tool-use-finetuning (477个样本) |
+| **微调方法** | LoRA (Low-Rank Adaptation) |
+| **依赖管理** | uv |
+| **训练时间** | 1-2小时 (A100) |
+| **预期成本** | $2-4 (HF Jobs) |
 
-## 📁 项目结构（极简版）
+## 🔧 技术栈
+
+- **模型**: Gemma-3-1b-it
+- **微调方法**: LoRA (r=16, alpha=32)
+- **框架**: Transformers + PEFT
+- **数据格式**: Gemma对话格式
+- **优化器**: AdamW (lr=2e-5)
+- **精度**: bfloat16 (GPU) / float32 (CPU)
+- **依赖管理**: uv
+
+## 📁 项目结构
 
 ```
 ft/
-├── simple_train.py           # 🎯 核心：一个文件包含所有训练逻辑  
-├── HF_JOBS_GUIDE.md         # ☁️ 云端训练指南
-├── configs/training_config_public.yaml  # ⚙️ 基础配置
-├── pyproject.toml           # 📦 依赖管理
-└── README.md               # 📖 本文件
+├── simple_train.py              # 🏠 本地训练脚本
+├── hf_jobs_train.py            # ☁️ HF Jobs训练脚本
+├── pyproject.toml              # 📦 uv依赖配置
+├── README.md                   # 📖 项目说明
+└── .gitignore                  # 🚫 Git忽略文件
 ```
 
-## 🔥 第一性原理优势
+## 🎉 获取成果
 
-| 传统方式 | 🆚 | 极简方式 |
-|---------|---|---------|
-| 10+文件 | → | 1个文件 |
-| 多层模块 | → | 直接逻辑 |
-| 复杂配置 | → | 硬编码参数 |
-| 本地环境 | → | 云端运行 |
-| 高成本 | → | $0.10完成 |
+训练完成后，你将获得：
 
-## 🎯 微调目标
+1. **本地模型**: `./gemma3-tool-use/`
+2. **Hub模型**: `your-username/gemma3-1b-tool-use`
+3. **训练日志**: Weights & Biases记录
 
-- **模型**：Gemma-3-1b（google/gemma2-1.1b-it）
-- **能力**：Tool Use - 学会调用工具和函数
-- **数据**：shawhin/tool-use-finetuning（597个专业样本）
-- **格式**：XML工具调用 - `<tool_call>{"tool_name": "xxx", "args": {}}</tool_call>`
-- **方法**：LoRA微调（r=16，针对全注意力层）
-- **时长**：2个epoch，15-20分钟，成本约$0.50
+### 使用微调后的模型
 
-## 🚀 立即开始
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
-1. 获取HF Pro账户（$9/月）
-2. 设置HF_TOKEN环境变量  
-3. 复制命令运行即可！
+# 加载微调后的模型
+model = AutoModelForCausalLM.from_pretrained("your-username/gemma3-1b-tool-use")
+tokenizer = AutoTokenizer.from_pretrained("your-username/gemma3-1b-tool-use")
 
-**就是这么简单！** 🎉
+# 进行工具调用推理
+prompt = "What's the weather like in Beijing?"
+inputs = tokenizer(prompt, return_tensors="pt")
+outputs = model.generate(**inputs, max_length=200)
+response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+print(response)
+```
+
+## 🚀 uv的优势
+
+- **快速安装**: 比pip快10-100倍
+- **依赖解析**: 更智能的依赖冲突解决
+- **虚拟环境**: 自动管理虚拟环境
+- **缓存优化**: 智能缓存减少重复下载
+- **跨平台**: 支持Windows、macOS、Linux
+
+## 📝 许可证
+
+本项目遵循MIT许可证。
+
+## 🤝 贡献
+
+欢迎提交Issue和Pull Request！
