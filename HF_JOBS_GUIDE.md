@@ -44,15 +44,15 @@ uv run hf jobs ps
 
 ```bash
 # 正确的命令格式（本地运行，云端执行）
-# 方式1: 单行命令（推荐，避免换行问题）
-uv run hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel -- bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && pip install 'transformers==4.44.2' 'accelerate==0.33.0' datasets peft torch && uv run python hf_jobs_train.py"
+# 方式1: 使用项目的模块化架构（推荐）
+uv run hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel -- bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && uv sync && uv run python scripts/train.py --config configs/training_config_public.yaml"
 
 # 方式2: 多行命令（如果终端支持）
 uv run hf jobs run \
     --flavor a10g-small \
     --secrets HF_TOKEN \
     pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel \
-    -- bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && pip install 'transformers==4.44.2' 'accelerate==0.33.0' datasets peft torch && uv run python hf_jobs_train.py"
+    -- bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && uv sync && uv run python scripts/train.py --config configs/training_config_public.yaml"
 
 # 🚀 最佳选择：使用HF Jobs的uv支持
 uv run hf jobs uv --flavor a10g-small \
@@ -77,11 +77,13 @@ uv run hf jobs uv --flavor a10g-small \
         subprocess.run(['apt-get', 'install', '-y', 'git'], check=True)
     
     subprocess.run(['git', 'clone', 'https://github.com/layue13/ft.git'], check=True)
-    subprocess.run(['python', 'ft/hf_jobs_train.py'], check=True)
+    subprocess.run(['pip', 'install', 'uv'], check=True) 
+    subprocess.run(['uv', 'sync'], cwd='ft', check=True)
+    subprocess.run(['uv', 'run', 'python', 'scripts/train.py', '--config', 'configs/training_config_public.yaml'], cwd='ft', check=True)
     "
 
-# 方式3: 传统单行方式（确保正确格式）
-uv run hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel -- bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && pip install 'transformers==4.44.2' 'accelerate==0.33.0' datasets peft torch && uv run python hf_jobs_train.py"
+# 方式3: 备用单行方式（兼容性最佳）
+uv run hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel -- bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && uv sync && uv run python scripts/train.py --config configs/training_config_public.yaml"
 ```
 
 ### 4. 监控任务
@@ -157,21 +159,22 @@ hf jobs run --flavor a10g-small \
    zsh: no such file or directory: pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel
    ```
    **原因**: 多行命令在某些终端中被错误解析
-   **解决方案**: 使用单行命令格式:
+   **解决方案**: 使用项目的模块化架构:
    ```bash
-   uv run hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel -- bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && pip install 'transformers==4.44.2' 'accelerate==0.33.0' datasets peft torch && uv run python hf_jobs_train.py"
+   uv run hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel -- bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && uv sync && uv run python scripts/train.py --config configs/training_config_public.yaml"
    ```
 
 1c. **库版本兼容性错误** 🔧
    ```
    TypeError: Accelerator.unwrap_model() got an unexpected keyword argument 'keep_torch_compile'
    ```
-   **原因**: transformers和accelerate版本不兼容
-   **解决方案**: 使用具体的兼容版本:
-   - transformers==4.44.2
-   - accelerate==0.33.0
+   **根本原因**: 使用了独立的hf_jobs_train.py脚本而不是项目的模块化架构
+   **解决方案**: 
+   - ✅ 使用项目的scripts/train.py（已通过本地测试）
+   - ✅ 使用uv sync自动管理依赖版本
+   - ✅ 使用配置文件而不是硬编码参数
    
-   **更新后的命令**: 见上方命令示例
+   **修复后的命令**: 见上方新命令格式
 
 2. **认证失败**
    ```bash
