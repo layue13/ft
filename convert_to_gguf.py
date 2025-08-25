@@ -1,304 +1,226 @@
 #!/usr/bin/env python3
 """
 GGUF格式转换脚本
-将合并后的模型转换为GGUF格式，获得最佳性能和兼容性
+使用llama.cpp的convert_hf_to_gguf.py将Hugging Face模型转换为GGUF格式
+支持PEFT模型和多种量化选项
 """
 
 import os
 import sys
 import subprocess
+import shutil
 from pathlib import Path
 
 def check_dependencies():
     """检查必要的依赖"""
     print("🔍 检查依赖...")
     
+    # 检查git
     try:
-        import transformers
-        print("✅ transformers")
-    except ImportError:
-        print("❌ transformers 未安装")
+        subprocess.run(["git", "--version"], check=True, capture_output=True)
+        print("✅ git")
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print("❌ git 未安装")
         return False
     
+    # 检查make
     try:
-        # 检查llama-cpp-python (用于GGUF推理)
-        import llama_cpp
-        print("✅ llama-cpp-python")
-    except ImportError:
-        print("❌ llama-cpp-python 未安装")
-        return False
-    
-    try:
-        # 检查ctransformers (用于GGUF转换)
-        import ctransformers
-        print("✅ ctransformers")
-    except ImportError:
-        print("❌ ctransformers 未安装")
+        subprocess.run(["make", "--version"], check=True, capture_output=True)
+        print("✅ make")
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print("❌ make 未安装")
         return False
     
     return True
 
-def install_dependencies():
-    """安装必要的依赖"""
-    print("📦 安装依赖...")
+def install_llama_cpp():
+    """安装llama.cpp"""
+    print("📦 安装llama.cpp...")
     
-    dependencies = [
-        "llama-cpp-python",
-        "ctransformers[cuda]"  # 支持CUDA加速
-    ]
+    if os.path.exists("llama.cpp"):
+        print("✅ llama.cpp已存在，跳过下载")
+        return True
     
-    for dep in dependencies:
-        try:
-            # 使用uv pip安装
-            subprocess.check_call(["uv", "pip", "install", dep])
-            print(f"✅ {dep} 安装成功")
-        except subprocess.CalledProcessError:
-            print(f"❌ {dep} 安装失败")
-            return False
-    
-    return True
+    try:
+        # 克隆llama.cpp仓库
+        subprocess.run([
+            "git", "clone", "https://github.com/ggml-org/llama.cpp.git"
+        ], check=True)
+        print("✅ 已克隆llama.cpp仓库")
+        
+        # 编译
+        os.chdir("llama.cpp")
+        subprocess.run(["make"], check=True)
+        print("✅ 已编译llama.cpp")
+        os.chdir("..")
+        
+        return True
+        
+    except subprocess.CalledProcessError as e:
+        print(f"❌ 安装失败: {e}")
+        return False
 
 def convert_to_gguf(model_path, output_file, quantization="q4_k_m"):
     """转换为GGUF格式"""
-    print(f"🔄 开始GGUF转换...")
-    print(f"📦 源模型: {model_path}")
-    print(f"📁 输出文件: {output_file}")
-    print(f"🔧 量化类型: {quantization}")
+    print(f"🔄 开始转换: {model_path} -> {output_file}")
     
-    # 检查源模型是否存在
-    if not os.path.exists(model_path):
-        print(f"❌ 源模型不存在: {model_path}")
+    if not os.path.exists("llama.cpp"):
+        print("❌ llama.cpp未安装，请先运行安装")
         return False
     
-    # 检查是否包含必要的文件
-    required_files = ["config.json", "tokenizer.json"]
-    # 检查模型文件（支持多种格式）
-    model_files = ["pytorch_model.bin", "model.safetensors"]
-    has_model_file = any(os.path.exists(os.path.join(model_path, f)) for f in model_files)
-    
-    missing_files = [f for f in required_files if not os.path.exists(os.path.join(model_path, f))]
-    
-    if missing_files:
-        print(f"❌ 源模型缺少必要文件: {missing_files}")
-        print("💡 请先运行 merge_lora.py 合并LoRA权重")
+    # 检查转换脚本
+    convert_script = "llama.cpp/convert_hf_to_gguf.py"
+    if not os.path.exists(convert_script):
+        print(f"❌ 转换脚本不存在: {convert_script}")
         return False
-    
-    if not has_model_file:
-        print(f"❌ 源模型缺少模型文件，需要以下之一: {model_files}")
-        print("💡 请先运行 merge_lora.py 合并LoRA权重")
-        return False
-    
-    print("✅ 模型文件检查通过")
     
     try:
-        # 使用transformers加载，然后转换为GGUF
-        from transformers import AutoModelForCausalLM, AutoTokenizer
-        
-        print("🔄 使用transformers加载模型...")
-        
-        # 加载模型和tokenizer
-        model = AutoModelForCausalLM.from_pretrained(
+        # 运行转换
+        cmd = [
+            sys.executable, convert_script,
             model_path,
-            torch_dtype="auto",
-            device_map="auto"
-        )
-        tokenizer = AutoTokenizer.from_pretrained(model_path)
+            "--outfile", output_file,
+            "--outtype", quantization
+        ]
         
-        print("🔄 转换为GGUF格式...")
+        print(f"🚀 执行命令: {' '.join(cmd)}")
+        subprocess.run(cmd, check=True)
         
-        # 使用llama.cpp的转换工具
-        try:
-            # 尝试使用llama.cpp的convert.py
-            convert_script = """
-import sys
-import os
-sys.path.append('llama.cpp')
-
-from convert import convert_hf_to_gguf
-
-# 转换模型
-convert_hf_to_gguf(
-    model_path='{model_path}',
-    output_path='{output_file}',
-    model_type='llama'
-)
-"""
-            
-            # 检查是否有llama.cpp
-            if not os.path.exists("llama.cpp"):
-                print("📦 下载llama.cpp...")
-                subprocess.check_call(["git", "clone", "https://github.com/ggerganov/llama.cpp.git"])
-            
-            # 运行转换
-            with open("temp_convert.py", "w") as f:
-                f.write(convert_script.format(model_path=model_path, output_file=output_file))
-            
-            subprocess.check_call([sys.executable, "temp_convert.py"])
-            os.remove("temp_convert.py")
-            
-        except Exception as e:
-            print(f"llama.cpp转换失败: {e}")
-            print("🔄 尝试使用transformers直接保存...")
-            
-            # 备用方案：直接保存为transformers格式，然后手动转换
-            temp_dir = "./temp_model_for_gguf"
-            model.save_pretrained(temp_dir)
-            tokenizer.save_pretrained(temp_dir)
-            
-            print(f"💾 模型已保存到临时目录: {temp_dir}")
-            print("💡 请手动使用llama.cpp转换:")
-            print(f"   cd llama.cpp")
-            print(f"   python convert.py {temp_dir} --outfile {output_file} --outtype {quantization}")
-            return False
-        
-        print("✅ GGUF转换成功！")
-        
-        # 显示文件信息
-        if os.path.exists(output_file):
-            file_size = os.path.getsize(output_file) / (1024 * 1024)  # MB
-            print(f"📁 输出文件: {output_file}")
-            print(f"📊 文件大小: {file_size:.2f} MB")
-        
+        print(f"✅ 转换完成: {output_file}")
         return True
-            
-    except Exception as e:
+        
+    except subprocess.CalledProcessError as e:
         print(f"❌ 转换失败: {e}")
-        print("💡 提示: 如果转换失败，可以尝试使用llama.cpp手动转换")
         return False
 
 def create_usage_script(output_file):
-    """创建使用脚本"""
-    print("📝 创建使用脚本...")
+    """创建使用示例脚本"""
+    print("📝 创建使用示例脚本...")
     
-    script_content = f"""#!/usr/bin/env python3
+    usage_script = f"""
+#!/usr/bin/env python3
 \"\"\"
 GGUF模型使用示例
 \"\"\"
 
-import os
-from llama_cpp import Llama
+import subprocess
+import sys
 
-def load_gguf_model(model_path):
-    \"\"\"加载GGUF模型\"\"\"
-    if not os.path.exists(model_path):
-        print(f"❌ 模型文件不存在: {{model_path}}")
-        return None
+def run_llama_cpp(model_path, prompt, max_tokens=512):
+    \"\"\"使用llama.cpp运行GGUF模型\"\"\"
+    cmd = [
+        "./llama.cpp/main",
+        "-m", model_path,
+        "-n", str(max_tokens),
+        "-p", prompt,
+        "--repeat_penalty", "1.1",
+        "--temp", "0.7"
+    ]
     
     try:
-        # 加载模型
-        llm = Llama(
-            model_path=model_path,
-            n_ctx=4096,  # 上下文长度
-            n_threads=4,  # CPU线程数
-            n_gpu_layers=0  # GPU层数，根据你的GPU调整
-        )
-        print("✅ GGUF模型加载成功")
-        return llm
-    except Exception as e:
-        print(f"❌ 模型加载失败: {{e}}")
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return result.stdout.strip()
+    except subprocess.CalledProcessError as e:
+        print(f"运行失败: {{e}}")
         return None
 
-def generate_tool_call(llm, prompt, max_tokens=512):
-    \"\"\"生成工具调用响应\"\"\"
-    try:
-        # 格式化输入
-        formatted_prompt = f"<bos><start_of_turn>user\\n{{prompt}}<end_of_turn>\\n<start_of_turn>model\\n"
-        
-        # 生成响应
-        response = llm(
-            formatted_prompt,
-            max_tokens=max_tokens,
-            temperature=0.7,
-            top_p=0.9,
-            stop=["<eos>", "</s>"]
-        )
-        
-        return response['choices'][0]['text']
-    except Exception as e:
-        print(f"❌ 生成失败: {{e}}")
-        return None
+def main():
+    model_path = "{output_file}"
+    
+    if not os.path.exists(model_path):
+        print(f"模型文件不存在: {{model_path}}")
+        return
+    
+    # 示例提示
+    prompt = "帮我查询北京的天气"
+    
+    print(f"用户: {{prompt}}")
+    print("助手: ", end="")
+    
+    response = run_llama_cpp(model_path, prompt)
+    if response:
+        print(response)
+    else:
+        print("生成失败")
 
 if __name__ == "__main__":
-    # 加载模型
-    model_path = "{output_file}"
-    llm = load_gguf_model(model_path)
-    
-    if llm:
-        # 测试工具调用
-        prompt = "帮我查询北京的天气"
-        print(f"\\n用户: {{prompt}}")
-        
-        response = generate_tool_call(llm, prompt)
-        if response:
-            print(f"助手: {{response}}")
-        else:
-            print("❌ 生成失败")
+    main()
 """
     
-    script_file = "gguf_inference.py"
-    with open(script_file, "w") as f:
-        f.write(script_content)
+    with open("run_gguf_model.py", "w") as f:
+        f.write(usage_script)
     
-    print(f"✅ 使用脚本已创建: {script_file}")
+    print("✅ 使用示例脚本已创建: run_gguf_model.py")
 
 def main():
     print("🚀 GGUF格式转换工具")
     print("=" * 50)
     
-    # 检查依赖
+    # 1. 检查依赖
     if not check_dependencies():
-        print("\n📦 安装缺失的依赖...")
-        if not install_dependencies():
-            print("❌ 依赖安装失败")
-            return
-        if not check_dependencies():
-            print("❌ 依赖检查失败")
-            return
-    
-    print("\n" + "=" * 50)
-    
-    # 获取输入
-    model_path = input("请输入模型路径 (例如: ./gemma3-1b-tool-use-merged): ").strip()
-    if not model_path:
-        print("❌ 模型路径不能为空")
+        print("\n❌ 依赖检查失败，请安装必要的工具")
         return
     
-    output_file = input("请输入输出文件 (默认: ./gemma3-1b-tool-use.gguf): ").strip()
+    # 2. 安装llama.cpp
+    if not install_llama_cpp():
+        print("\n❌ llama.cpp安装失败")
+        return
+    
+    # 3. 获取输入
+    print("\n📝 配置转换参数:")
+    
+    model_path = input("请输入模型路径 (例如: ./gemma3-1b-tool-use-merged 或 layue13/gemma3-1b-tool-use): ").strip()
+    if not model_path:
+        model_path = "./gemma3-1b-tool-use-merged"
+    
+    output_file = input("请输入输出文件名 (例如: gemma3-1b-tool-use.gguf): ").strip()
     if not output_file:
-        output_file = "./gemma3-1b-tool-use.gguf"
+        output_file = "gemma3-1b-tool-use.gguf"
     
     # 量化选项
+    quantization_options = {
+        "1": "q4_k_m",    # 推荐，平衡大小和性能
+        "2": "q8_0",      # 高质量，较大文件
+        "3": "q5_k_m",    # 中等质量
+        "4": "q3_k_m",    # 小文件，较低质量
+    }
+    
     print("\n🔧 选择量化类型:")
-    print("1. q4_k_m (推荐) - 平衡质量和大小")
-    print("2. q8_0 - 高质量，较大文件")
-    print("3. q5_k_m - 中等质量")
-    print("4. q3_k_m - 小文件，质量较低")
-    print("5. 无量化 - 保持原始精度")
+    for key, value in quantization_options.items():
+        print(f"  {key}. {value}")
     
-    quantization = input("请选择量化类型 (默认: q4_k_m): ").strip()
-    if not quantization:
-        quantization = "q4_k_m"
+    choice = input("请选择 (默认1): ").strip() or "1"
+    quantization = quantization_options.get(choice, "q4_k_m")
     
-    # 注意：ctransformers的量化选项可能不同
-    print(f"💡 注意: 使用ctransformers进行转换，量化选项: {quantization}")
+    print(f"\n📊 转换配置:")
+    print(f"  模型路径: {model_path}")
+    print(f"  输出文件: {output_file}")
+    print(f"  量化类型: {quantization}")
     
+    # 4. 执行转换
     print("\n" + "=" * 50)
-    
-    # 执行转换
     if convert_to_gguf(model_path, output_file, quantization):
-        print("\n🎉 GGUF转换成功！")
-        print(f"📁 GGUF文件: {output_file}")
+        print("✅ 转换成功！")
         
-        # 创建使用脚本
+        # 5. 创建使用示例
         create_usage_script(output_file)
         
-        print("\n💡 使用方法:")
-        print("1. 安装依赖: pip install llama-cpp-python")
-        print("2. 运行示例: python gguf_inference.py")
-        print("3. 在LM Studio中加载GGUF文件")
-        print("4. 使用llama.cpp进行推理")
+        # 6. 显示结果
+        print("\n" + "=" * 50)
+        print("🎉 转换完成！")
+        print(f"\n📁 输出文件: {output_file}")
+        print(f"📝 使用示例: run_gguf_model.py")
+        
+        print("\n🔧 使用方法:")
+        print("1. 直接使用llama.cpp:")
+        print(f"   ./llama.cpp/main -m {output_file} -n 512 -p '你的提示'")
+        print("\n2. 使用示例脚本:")
+        print("   python run_gguf_model.py")
+        print("\n3. 在LM Studio中加载:")
+        print(f"   选择文件: {output_file}")
+        
     else:
-        print("\n❌ GGUF转换失败，请检查错误信息")
+        print("❌ 转换失败")
 
 if __name__ == "__main__":
     main()

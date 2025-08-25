@@ -245,21 +245,18 @@ tokenizer = AutoTokenizer.from_pretrained("your-username/gemma3-1b-tool-use")
 转换为GGUF格式获得最佳性能和兼容性：
 
 ```bash
-# 方法1: 使用llama.cpp转换
-git clone https://github.com/ggerganov/llama.cpp
+# 使用llama.cpp转换 (推荐)
+git clone https://github.com/ggml-org/llama.cpp
 cd llama.cpp
 make
 
-# 转换模型 (需要先合并LoRA权重)
-python convert.py your-username/gemma3-1b-tool-use \
+# 转换模型 (支持PEFT模型，无需先合并)
+python convert_hf_to_gguf.py your-username/gemma3-1b-tool-use \
     --outfile gemma3-1b-tool-use.gguf \
     --outtype q4_k_m
 
-# 方法2: 使用transformers-to-gguf
-pip install transformers-to-gguf
-transformers-to-gguf your-username/gemma3-1b-tool-use \
-    --output gemma3-1b-tool-use.gguf \
-    --quantize q4_k_m
+# 或者使用我们的转换脚本
+python convert_to_gguf.py
 ```
 
 **GGUF优势**:
