@@ -145,7 +145,8 @@ uv run python hf_jobs_train.py
 ft/
 ├── simple_train.py              # 🏠 本地训练脚本
 ├── hf_jobs_train.py            # ☁️ HF Jobs训练脚本
-├── convert_model.py             # 🔄 模型转换脚本 (MLX/GGUF)
+├── merge_lora.py                # 🔄 LoRA权重合并脚本
+├── convert_to_gguf.py           # 🚀 GGUF格式转换脚本
 ├── pyproject.toml              # 📦 uv依赖配置
 ├── README.md                   # 📖 项目说明
 └── .gitignore                  # 🚫 Git忽略文件
@@ -298,27 +299,38 @@ print("✅ LoRA权重已合并，模型已保存")
 - 💾 **更小体积**: 比分离存储更紧凑
 - 🔧 **更好部署**: 适合生产环境
 
-### 🚀 一键转换脚本
+### 🚀 手动转换脚本
 
-使用提供的转换脚本自动处理所有格式：
+使用两个独立的脚本进行手动转换：
+
+#### 步骤1: 合并LoRA权重
 
 ```bash
-# 运行转换脚本
-python convert_model.py
+# 运行LoRA权重合并脚本
+python merge_lora.py
 
-# 按提示输入模型名称
-# 脚本会自动:
-# 1. 合并LoRA权重
-# 2. 转换为GGUF格式
-# 3. 创建MLX使用脚本
-# 4. 生成使用说明
+# 按提示输入:
+# - 模型名称 (例如: layue13/gemma3-1b-tool-use)
+# - 输出目录 (默认: ./gemma3-1b-tool-use-merged)
+```
+
+#### 步骤2: 转换为GGUF格式
+
+```bash
+# 运行GGUF转换脚本
+python convert_to_gguf.py
+
+# 按提示输入:
+# - 模型路径 (合并后的模型目录)
+# - 输出文件 (默认: ./gemma3-1b-tool-use.gguf)
+# - 量化类型 (推荐: q4_k_m)
 ```
 
 **转换脚本功能**:
-- 🔄 **自动合并**: LoRA权重自动合并
-- 🚀 **GGUF转换**: 支持量化优化
-- 🍎 **MLX支持**: Apple Silicon优化
-- 📝 **脚本生成**: 自动生成使用脚本
+- 🔄 **独立合并**: 专门的LoRA权重合并
+- 🚀 **GGUF转换**: 支持多种量化选项
+- 📝 **自动生成**: 生成使用示例脚本
+- 🔧 **依赖检查**: 自动检查和安装依赖
 
 ### 工具调用格式说明
 
