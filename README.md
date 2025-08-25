@@ -145,6 +145,7 @@ uv run python hf_jobs_train.py
 ft/
 ├── simple_train.py              # 🏠 本地训练脚本
 ├── hf_jobs_train.py            # ☁️ HF Jobs训练脚本
+├── convert_model.py             # 🔄 模型转换脚本 (MLX/GGUF)
 ├── pyproject.toml              # 📦 uv依赖配置
 ├── README.md                   # 📖 项目说明
 └── .gitignore                  # 🚫 Git忽略文件
@@ -219,17 +220,105 @@ git clone https://huggingface.co/your-username/gemma3-1b-tool-use
 - **GPU Layers**: 根据你的GPU内存调整
 - **Threads**: CPU核心数
 
-#### 方法3: 转换为GGUF格式 (可选)
+#### 方法3: MLX优化 (Apple Silicon)
 
-如果需要更好的性能，可以转换为GGUF格式：
+对于Apple Silicon Mac，可以使用MLX获得最佳性能：
 
 ```bash
-# 安装转换工具
-pip install llama-cpp-python
+# 安装MLX
+pip install mlx
 
-# 转换为GGUF (需要额外步骤)
-# 注意: Gemma模型转换可能需要特殊处理
+# 使用MLX加载模型
+import mlx.core as mx
+from transformers import AutoTokenizer
+
+# 加载tokenizer
+tokenizer = AutoTokenizer.from_pretrained("your-username/gemma3-1b-tool-use")
+
+# 使用MLX进行推理 (需要MLX适配)
+# 注意: 需要将模型转换为MLX格式
 ```
+
+#### 方法4: 转换为GGUF格式 (推荐)
+
+转换为GGUF格式获得最佳性能和兼容性：
+
+```bash
+# 方法1: 使用llama.cpp转换
+git clone https://github.com/ggerganov/llama.cpp
+cd llama.cpp
+make
+
+# 转换模型 (需要先合并LoRA权重)
+python convert.py your-username/gemma3-1b-tool-use \
+    --outfile gemma3-1b-tool-use.gguf \
+    --outtype q4_k_m
+
+# 方法2: 使用transformers-to-gguf
+pip install transformers-to-gguf
+transformers-to-gguf your-username/gemma3-1b-tool-use \
+    --output gemma3-1b-tool-use.gguf \
+    --quantize q4_k_m
+```
+
+**GGUF优势**:
+- 🚀 **更快推理**: 比原格式快2-5倍
+- 💾 **更小体积**: 量化后体积减少50-75%
+- 🔧 **更好兼容**: 支持更多推理框架
+- 🖥️ **更低资源**: 可在CPU上高效运行
+
+#### 方法5: 合并LoRA权重 (推荐)
+
+为了获得最佳兼容性，建议先合并LoRA权重：
+
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from peft import PeftModel
+
+# 加载基础模型
+base_model = AutoModelForCausalLM.from_pretrained("google/gemma-3-1b-it")
+tokenizer = AutoTokenizer.from_pretrained("google/gemma-3-1b-it")
+
+# 加载LoRA权重
+model = PeftModel.from_pretrained(base_model, "your-username/gemma3-1b-tool-use")
+
+# 合并权重
+merged_model = model.merge_and_unload()
+
+# 保存合并后的模型
+merged_model.save_pretrained("./gemma3-1b-tool-use-merged")
+tokenizer.save_pretrained("./gemma3-1b-tool-use-merged")
+
+print("✅ LoRA权重已合并，模型已保存")
+```
+
+**合并后的优势**:
+- ✅ **完全兼容**: 所有推理框架都支持
+- 🚀 **更快加载**: 无需动态加载LoRA
+- 💾 **更小体积**: 比分离存储更紧凑
+- 🔧 **更好部署**: 适合生产环境
+
+### 🚀 一键转换脚本
+
+使用提供的转换脚本自动处理所有格式：
+
+```bash
+# 运行转换脚本
+python convert_model.py
+
+# 按提示输入模型名称
+# 脚本会自动:
+# 1. 合并LoRA权重
+# 2. 转换为GGUF格式
+# 3. 创建MLX使用脚本
+# 4. 生成使用说明
+```
+
+**转换脚本功能**:
+- 🔄 **自动合并**: LoRA权重自动合并
+- 🚀 **GGUF转换**: 支持量化优化
+- 🍎 **MLX支持**: Apple Silicon优化
+- 📝 **脚本生成**: 自动生成使用脚本
 
 ### 工具调用格式说明
 
