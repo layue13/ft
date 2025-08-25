@@ -123,6 +123,60 @@ def install_llama_cpp():
         print(f"❌ 安装失败: {e}")
         return False
 
+def is_peft_model(model_path):
+    """检查是否为PEFT模型"""
+    try:
+        # 检查是否存在adapter_config.json
+        adapter_config = os.path.join(model_path, "adapter_config.json")
+        if os.path.exists(adapter_config):
+            return True
+        
+        # 检查是否存在adapter_model.bin
+        adapter_model = os.path.join(model_path, "adapter_model.bin")
+        if os.path.exists(adapter_model):
+            return True
+        
+        return False
+    except:
+        return False
+
+def merge_lora_weights(model_path, output_dir):
+    """合并LoRA权重"""
+    print(f"🔧 检测到PEFT模型，开始合并LoRA权重...")
+    print(f"📦 源模型: {model_path}")
+    print(f"📁 输出目录: {output_dir}")
+    
+    try:
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        from peft import PeftModel
+        
+        print("📦 加载基础模型 (google/gemma-3-1b-it)...")
+        base_model = AutoModelForCausalLM.from_pretrained(
+            "google/gemma-3-1b-it",
+            torch_dtype="auto",
+            device_map="auto"
+        )
+        tokenizer = AutoTokenizer.from_pretrained("google/gemma-3-1b-it")
+        
+        print("📦 加载LoRA权重...")
+        model = PeftModel.from_pretrained(base_model, model_path)
+        
+        print("🔧 合并权重...")
+        merged_model = model.merge_and_unload()
+        
+        print("💾 保存合并后的模型...")
+        merged_model.save_pretrained(output_dir)
+        tokenizer.save_pretrained(output_dir)
+        
+        print(f"✅ LoRA权重合并完成！")
+        print(f"📁 合并后的模型已保存到: {output_dir}")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ 合并失败: {e}")
+        return False
+
 def convert_to_gguf(model_path, output_file, quantization="q4_k_m"):
     """转换为GGUF格式"""
     print(f"🔄 开始转换: {model_path} -> {output_file}")
@@ -315,15 +369,37 @@ def main():
     print(f"  输出文件: {output_file}")
     print(f"  量化类型: {quantization}")
     
-    # 4. 执行转换
+    # 4. 检查模型类型并处理
+    print("\n" + "=" * 50)
+    
+    # 检查是否为PEFT模型
+    if is_peft_model(model_path):
+        print("🔍 检测到PEFT模型，需要先合并LoRA权重...")
+        
+        # 生成合并后的模型路径
+        merged_dir = f"{model_path}-merged"
+        if os.path.exists(merged_dir):
+            print(f"✅ 发现已合并的模型: {merged_dir}")
+            model_path = merged_dir
+        else:
+            print("📦 开始合并LoRA权重...")
+            if merge_lora_weights(model_path, merged_dir):
+                model_path = merged_dir
+            else:
+                print("❌ LoRA权重合并失败")
+                return
+    else:
+        print("✅ 检测到标准模型，无需合并")
+    
+    # 5. 执行转换
     print("\n" + "=" * 50)
     if convert_to_gguf(model_path, output_file, quantization):
         print("✅ 转换成功！")
         
-        # 5. 创建使用示例
+        # 6. 创建使用示例
         create_usage_script(output_file)
         
-        # 6. 显示结果
+        # 7. 显示结果
         print("\n" + "=" * 50)
         print("🎉 转换完成！")
         print(f"\n📁 输出文件: {output_file}")

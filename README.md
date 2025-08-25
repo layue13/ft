@@ -189,11 +189,22 @@ git lfs install
 git clone https://huggingface.co/your-username/gemma3-1b-tool-use
 ```
 
-**步骤2: 在LM Studio中加载**
+**步骤2: 合并LoRA权重 (重要!)**
+```bash
+# 运行合并脚本
+python merge_lora.py
+
+# 或者使用转换脚本自动合并
+python convert_to_gguf.py
+```
+
+**步骤3: 在LM Studio中加载**
 1. 打开LM Studio
 2. 点击 "Local Server" 标签
-3. 点击 "Browse" 选择模型文件夹 (`gemma3-1b-tool-use`)
+3. 点击 "Browse" 选择**合并后**的模型文件夹 (`gemma3-1b-tool-use-merged`)
 4. 点击 "Load Model"
+
+**注意**: LM Studio无法直接加载PEFT模型，必须先合并LoRA权重！
 
 **步骤3: 配置聊天界面**
 1. 切换到 "Chat" 标签
