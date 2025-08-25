@@ -156,7 +156,7 @@ uv run hf jobs cancel <job-id>
 
 ## 📝 使用我们的训练脚本
 
-项目中已包含 `hf_jobs_train.py`，这是专门为HF Jobs优化的训练脚本：
+项目中已包含 `simple_train.py`，这是第一性原理设计的极简训练脚本：
 
 ```bash
 # 提交我们的微调任务
@@ -167,7 +167,7 @@ hf jobs run --flavor a10g-small \
         git clone https://github.com/layue13/ft.git && 
         cd ft && 
         pip install transformers datasets peft accelerate torch && 
-        python hf_jobs_train.py
+        python simple_train.py
     "
 ```
 
@@ -189,8 +189,11 @@ hf jobs run --flavor a10g-small \
    ```
    **解决方案**: 使用正确的命令格式（注意 `--` 分隔符）:
    ```bash
-   uv run hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel \
-       -- bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && uv run python hf_jobs_train.py"
+   # ❌ 错误 - 文件已删除
+   hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel bash -c "git clone https://github.com/layue13/ft.git && cd ft && python hf_jobs_train.py"
+   
+   # ✅ 正确 - 使用 simple_train.py
+   hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel bash -c "git clone https://github.com/layue13/ft.git && cd ft && python simple_train.py"
    ```
 
 1b. **命令解析错误** 🔧
