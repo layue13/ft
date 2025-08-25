@@ -91,23 +91,65 @@ def convert_to_gguf(model_path, output_file, quantization="q4_k_m"):
     print("✅ 模型文件检查通过")
     
     try:
-        # 使用ctransformers转换
-        from ctransformers import AutoModelForCausalLM
+        # 使用transformers加载，然后转换为GGUF
+        from transformers import AutoModelForCausalLM, AutoTokenizer
         
-        print("🔄 加载模型进行转换...")
+        print("🔄 使用transformers加载模型...")
         
-        # 加载模型
+        # 加载模型和tokenizer
         model = AutoModelForCausalLM.from_pretrained(
             model_path,
-            model_type="llama",  # Gemma使用llama架构
-            lib="avx2",  # 使用AVX2优化
-            gpu_layers=0  # CPU推理
+            torch_dtype="auto",
+            device_map="auto"
         )
+        tokenizer = AutoTokenizer.from_pretrained(model_path)
         
-        print("🔄 保存为GGUF格式...")
+        print("🔄 转换为GGUF格式...")
         
-        # 保存为GGUF格式
-        model.save_pretrained(output_file)
+        # 使用llama.cpp的转换工具
+        try:
+            # 尝试使用llama.cpp的convert.py
+            convert_script = """
+import sys
+import os
+sys.path.append('llama.cpp')
+
+from convert import convert_hf_to_gguf
+
+# 转换模型
+convert_hf_to_gguf(
+    model_path='{model_path}',
+    output_path='{output_file}',
+    model_type='llama'
+)
+"""
+            
+            # 检查是否有llama.cpp
+            if not os.path.exists("llama.cpp"):
+                print("📦 下载llama.cpp...")
+                subprocess.check_call(["git", "clone", "https://github.com/ggerganov/llama.cpp.git"])
+            
+            # 运行转换
+            with open("temp_convert.py", "w") as f:
+                f.write(convert_script.format(model_path=model_path, output_file=output_file))
+            
+            subprocess.check_call([sys.executable, "temp_convert.py"])
+            os.remove("temp_convert.py")
+            
+        except Exception as e:
+            print(f"llama.cpp转换失败: {e}")
+            print("🔄 尝试使用transformers直接保存...")
+            
+            # 备用方案：直接保存为transformers格式，然后手动转换
+            temp_dir = "./temp_model_for_gguf"
+            model.save_pretrained(temp_dir)
+            tokenizer.save_pretrained(temp_dir)
+            
+            print(f"💾 模型已保存到临时目录: {temp_dir}")
+            print("💡 请手动使用llama.cpp转换:")
+            print(f"   cd llama.cpp")
+            print(f"   python convert.py {temp_dir} --outfile {output_file} --outtype {quantization}")
+            return False
         
         print("✅ GGUF转换成功！")
         
