@@ -147,7 +147,7 @@ def main():
         save_total_limit=3,
         push_to_hub=True,  # 推送到Hub
         hub_model_id="gemma3-1b-tool-use",  # 指定Hub模型名
-        report_to="wandb",  # 使用wandb记录
+        report_to="none",  # 禁用wandb避免API key问题
         remove_unused_columns=False,
         dataloader_num_workers=2,  # 增加数据加载器工作进程
         bf16=bf16_supported,
