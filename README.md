@@ -160,6 +160,8 @@ ft/
 
 ### 使用微调后的模型
 
+#### 方法1: Python代码使用
+
 ```python
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -173,6 +175,81 @@ inputs = tokenizer(prompt, return_tensors="pt")
 outputs = model.generate(**inputs, max_length=200)
 response = tokenizer.decode(outputs[0], skip_special_tokens=True)
 print(response)
+```
+
+#### 方法2: LM Studio使用 (推荐)
+
+**步骤1: 下载模型**
+```bash
+# 从Hugging Face Hub下载模型
+git lfs install
+git clone https://huggingface.co/your-username/gemma3-1b-tool-use
+```
+
+**步骤2: 在LM Studio中加载**
+1. 打开LM Studio
+2. 点击 "Local Server" 标签
+3. 点击 "Browse" 选择模型文件夹 (`gemma3-1b-tool-use`)
+4. 点击 "Load Model"
+
+**步骤3: 配置聊天界面**
+1. 切换到 "Chat" 标签
+2. 设置合适的参数：
+   - **Temperature**: 0.7-0.9 (创造性)
+   - **Top P**: 0.9
+   - **Max Tokens**: 512
+   - **Stop Sequences**: `</s>`, `<eos>`
+
+**步骤4: 工具调用示例**
+```
+用户: 帮我查询北京的天气
+
+助手: <tool_call>
+{
+ "tool_name": "weather",
+ "args": {
+   "location": "Beijing"
+ }
+}
+</tool_call>
+```
+
+**步骤5: 高级配置**
+- **Context Length**: 4096 (Gemma-3-1b支持)
+- **GPU Layers**: 根据你的GPU内存调整
+- **Threads**: CPU核心数
+
+#### 方法3: 转换为GGUF格式 (可选)
+
+如果需要更好的性能，可以转换为GGUF格式：
+
+```bash
+# 安装转换工具
+pip install llama-cpp-python
+
+# 转换为GGUF (需要额外步骤)
+# 注意: Gemma模型转换可能需要特殊处理
+```
+
+### 工具调用格式说明
+
+训练后的模型支持以下格式：
+
+```
+<bos><start_of_turn>user
+你的问题
+<end_of_turn>
+<start_of_turn>model
+<tool_call>
+{
+ "tool_name": "工具名称",
+ "args": {
+   "参数1": "值1",
+   "参数2": "值2"
+ }
+}
+</tool_call>
+<end_of_turn><eos>
 ```
 
 ## 🚀 uv的优势
