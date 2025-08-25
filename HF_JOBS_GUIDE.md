@@ -48,7 +48,7 @@ uv run hf jobs run \
     --flavor a10g-small \
     --secrets HF_TOKEN \
     pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel \
-    bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && uv run python hf_jobs_train.py"
+    -- bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && uv run python hf_jobs_train.py"
 
 # 🚀 最佳选择：使用HF Jobs的uv支持
 uv run hf jobs uv --flavor a10g-small \
@@ -78,7 +78,7 @@ uv run hf jobs uv --flavor a10g-small \
 
 # 或者传统方式（已修复git问题）
 uv run hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel \
-    bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && uv run python hf_jobs_train.py"
+    -- bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && uv run python hf_jobs_train.py"
 ```
 
 ### 4. 监控任务
@@ -142,11 +142,19 @@ hf jobs run --flavor a10g-small \
    ```
    bash: line 1: git: command not found
    ```
-   **解决方案**: 命令中已包含git安装，或使用修复版本:
+   **解决方案**: 使用正确的命令格式（注意 `--` 分隔符）:
    ```bash
    uv run hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel \
-       bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && uv run python hf_jobs_train.py"
+       -- bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && uv run python hf_jobs_train.py"
    ```
+
+1b. **命令解析错误** 🔧
+   ```
+   fatal: You must specify a repository to clone.
+   bash: line 2: https://github.com/layue13/ft.git: No such file or directory
+   ```
+   **原因**: 缺少 `--` 分隔符导致命令被错误解析
+   **解决方案**: 确保在Docker镜像和命令之间添加 `--`
 
 2. **认证失败**
    ```bash
