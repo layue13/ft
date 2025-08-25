@@ -181,5 +181,10 @@ datasets/
 temp/
 tmp/
 
+# External repositories and temporary models
+llama.cpp/
+temp_model_for_gguf/
+gemma3-1b-tool-use-merged/
+
 # UV specific
 .uv/
