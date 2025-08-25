@@ -1,165 +1,218 @@
 #!/usr/bin/env python3
+# /// script
+# dependencies = [
+#     "torch>=2.2.0",
+#     "transformers>=4.40.0", 
+#     "peft>=0.7.1",
+#     "datasets>=2.14.0",
+#     "accelerate>=0.26.0",
+#     "huggingface-hub[cli]>=0.20.0"
+# ]
+# ///
 """
 Gemma-3-1b Tool Use 微调脚本
-基于第一性原理：模型 + 数据 + 训练循环
-目标：让Gemma-3-1b支持工具调用
+第一性原理: 模型 + 数据 + 训练 = 工具调用能力
 """
 
 import torch
-from transformers import (
-    AutoModelForCausalLM, AutoTokenizer, 
-    TrainingArguments, Trainer, DataCollatorForLanguageModeling
-)
-from peft import LoraConfig, get_peft_model, TaskType
-from datasets import load_dataset, Dataset
-import warnings
+import os
+from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments, Trainer
+from peft import LoraConfig, get_peft_model, TaskType, PeftModel
+from datasets import load_dataset
+from huggingface_hub import login
 
-# 忽略警告
-warnings.filterwarnings("ignore", category=FutureWarning, module="datasets")
-warnings.filterwarnings("ignore", category=SyntaxWarning, module="peft")
-warnings.filterwarnings("ignore", category=FutureWarning, module="huggingface_hub")
-warnings.filterwarnings("ignore", category=UserWarning, module="torch.utils.data.dataloader")
+# 常量配置
+MODEL_NAME = "google/gemma-3-1b-it"
+DATASET = "shawhin/tool-use-finetuning"
+DATASET_SIZE = 200
+OUTPUT_DIR = "./gemma3-tool-use"
+MAX_LENGTH = 512
+BATCH_SIZE = 1
+GRAD_ACCUMULATION = 4
+LEARNING_RATE = 2e-5
+EPOCHS = 2
+HF_REPO_ID = "gemma3-tool-use"  # 修改为你的HF用户名
 
-def main():
-    print("🚀 开始Gemma-3-1b Tool Use微调...")
-    
-    # 检查设备支持
+def setup_device():
+    """设备和精度配置"""
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"🔧 使用设备: {device}")
-    
-    # 检查bf16支持
     bf16_supported = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
-    print(f"🔧 bf16支持: {bf16_supported}")
+    dtype = torch.bfloat16 if bf16_supported else torch.float32
+    print(f"Device: {device}, dtype: {dtype}")
+    return device, bf16_supported, dtype
+
+def load_model_and_tokenizer(model_name, dtype, device):
+    """加载模型和分词器"""
+    print(f"Loading: {model_name}")
     
-    # 1. 模型和分词器 - Gemma-3-1b
-    model_name = "google/gemma-3-1b-it"  # 使用Gemma-3-1b模型
-    print(f"📦 加载模型: {model_name}")
-    
-    # 加载tokenizer，使用安全配置
-    tokenizer = AutoTokenizer.from_pretrained(
-        model_name, 
-        padding_side="right",
-        trust_remote_code=True
-    )
-    if tokenizer.pad_token is None:
+    tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side="right")
+    if not tokenizer.pad_token:
         tokenizer.pad_token = tokenizer.eos_token
     
-    # 加载模型，使用eager注意力机制
-    torch_dtype = torch.bfloat16 if bf16_supported else torch.float32
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
-        torch_dtype=torch_dtype,
+        torch_dtype=dtype,
         device_map="auto" if device == "cuda" else None,
-        trust_remote_code=True,
-        attn_implementation="eager"  # 使用eager注意力机制
+        attn_implementation="eager"
     )
+    return model, tokenizer
+
+def apply_lora(model):
+    """应用LoRA配置"""
+    # 先冻结所有参数
+    for param in model.parameters():
+        param.requires_grad = False
     
-    # 2. LoRA配置 - 针对Gemma模型
     lora_config = LoraConfig(
         r=16, lora_alpha=32, lora_dropout=0.1,
         task_type=TaskType.CAUSAL_LM,
         target_modules=["q_proj", "v_proj", "k_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
     )
     model = get_peft_model(model, lora_config)
+    
+    # 确保LoRA参数可训练
+    for name, param in model.named_parameters():
+        if "lora" in name.lower():
+            param.requires_grad = True
+    
     model.print_trainable_parameters()
+    return model
+
+def format_tool_data(example):
+    """将数据格式化为Gemma对话格式"""
+    if not example.get("tool_needed") or "trace" not in example:
+        return {"text": "<bos><start_of_turn>user\nhello<end_of_turn>\n<start_of_turn>model\nHello! How can I help?<end_of_turn><eos>"}
     
-    # 3. Tool Use数据 - 使用真实的工具调用数据集
-    print("📊 准备训练数据...")
+    conversation = "<bos>"
+    for msg in example["trace"]:
+        if msg.get("role") == "user":
+            conversation += f"<start_of_turn>user\n{msg.get('content', '')}<end_of_turn>\n"
     
-    # 加载真实的工具调用数据集
-    dataset = load_dataset("shawhin/tool-use-finetuning", split="train[:200]")
-    print(f"📦 加载数据集: {len(dataset)} 个样本")
+    if example.get("tool_name"):
+        tool_call = f'<tool_call>\n{{\n "tool_name": "{example["tool_name"]}",\n "args": {{}}\n}}\n</tool_call>'
+        conversation += f"<start_of_turn>model\n{tool_call}<end_of_turn>"
     
-    def format_tool_use_data(example):
-        """格式化工具调用数据为Gemma对话格式"""
-        if "trace" not in example or not example.get("tool_needed"):
-            return {"text": "<bos><start_of_turn>user\nhello<end_of_turn>\n<start_of_turn>model\nHello! How can I help you?<end_of_turn><eos>"}
-        
-        conversation = "<bos>"
-        
-        # 处理对话历史
-        for msg in example["trace"]:
-            role = msg.get("role", "")
-            content = msg.get("content", "")
-            
-            if role == "user":
-                conversation += f"<start_of_turn>user\n{content}<end_of_turn>\n"
-        
-        # 添加工具调用响应
-        if example.get("tool_needed") and example.get("tool_name"):
-            tool_call = f'<tool_call>\n{{\n "tool_name": "{example["tool_name"]}",\n "args": {{}}\n}}\n</tool_call>'
-            conversation += f"<start_of_turn>model\n{tool_call}<end_of_turn>"
-        
-        conversation += "<eos>"
-        return {"text": conversation}
-    
-    # 格式化数据集
-    dataset = dataset.map(format_tool_use_data)
-    print(f"✅ 数据格式化完成")
+    return {"text": conversation + "<eos>"}
+
+def prepare_dataset(dataset_name, size, tokenizer, max_length):
+    """准备训练数据"""
+    print(f"Loading dataset: {dataset_name}")
+    dataset = load_dataset(dataset_name, split=f"train[:{size}]")
+    dataset = dataset.map(format_tool_data)
     
     def tokenize(examples):
-        return tokenizer(
-            examples["text"], 
-            truncation=True, 
-            padding="max_length",
-            max_length=512,  # Gemma需要更长序列
-            return_tensors="pt"
-        )
+        return tokenizer(examples["text"], truncation=True, padding="max_length", max_length=max_length)
     
     tokenized = dataset.map(tokenize, batched=True, remove_columns=dataset.column_names)
     tokenized = tokenized.add_column("labels", tokenized["input_ids"])
+    print(f"Dataset ready: {len(tokenized)} samples")
+    return tokenized
+
+def create_trainer(model, tokenizer, train_dataset, output_dir, bf16_supported, device):
+    """创建训练器"""
+    hf_token = os.getenv("HF_TOKEN")
     
-    # 4. 数据整理器 - 处理批处理
-    data_collator = DataCollatorForLanguageModeling(
-        tokenizer=tokenizer,
-        mlm=False,  # 使用因果语言建模
-    )
-    
-    # 5. 训练参数 - Gemma优化，根据设备调整
     training_args = TrainingArguments(
-        output_dir="./gemma3-tool-use",
-        num_train_epochs=2,  # Gemma需要更多训练
-        per_device_train_batch_size=1,  # Gemma模型较大
-        gradient_accumulation_steps=4,  # 通过梯度累积增加有效batch size
-        learning_rate=2e-5,  # 较低学习率避免破坏预训练知识
+        output_dir=output_dir,
+        num_train_epochs=EPOCHS,
+        per_device_train_batch_size=BATCH_SIZE,
+        gradient_accumulation_steps=GRAD_ACCUMULATION,
+        learning_rate=LEARNING_RATE,
         warmup_ratio=0.1,
         logging_steps=10,
         save_strategy="epoch",
         save_total_limit=2,
-        push_to_hub=False,  # 暂时不上传
         report_to="none",
         remove_unused_columns=False,
         dataloader_num_workers=0,
         bf16=bf16_supported,
-        gradient_checkpointing=device == "cuda",
-        dataloader_pin_memory=False if device == "cpu" else True,  # CPU上禁用dataloader pin_memory
+        gradient_checkpointing=False,
+        dataloader_pin_memory=device != "cpu",
+        # 禁用自动Hub上传，避免权限问题
+        push_to_hub=False
     )
     
-    # 6. 训练器
-    trainer = Trainer(
+    return Trainer(
         model=model,
         args=training_args,
-        train_dataset=tokenized,
-        data_collator=data_collator,
+        train_dataset=train_dataset,
     )
+
+def merge_and_save_model(lora_model_path, output_path):
+    """合并LoRA权重到基础模型"""
+    base_model = AutoModelForCausalLM.from_pretrained(MODEL_NAME, torch_dtype=torch.bfloat16)
+    model = PeftModel.from_pretrained(base_model, lora_model_path)
+    merged_model = model.merge_and_unload()
     
-    # 7. 开始训练
-    print("✨ 开始Gemma-3-1b Tool Use微调...")
-    print(f"📊 训练样本: {len(tokenized)}")
-    print(f"🎯 目标: 让Gemma-3-1b学会工具调用")
-    print(f"⚙️ 训练配置: batch_size={training_args.per_device_train_batch_size}, "
-          f"gradient_accumulation={training_args.gradient_accumulation_steps}, "
-          f"learning_rate={training_args.learning_rate}")
+    merged_model.save_pretrained(output_path)
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+    tokenizer.save_pretrained(output_path)
+
+def upload_to_hub(model_path, repo_id):
+    """上传模型到Hugging Face Hub"""
+    if os.getenv("HF_TOKEN"):
+        login(token=os.getenv("HF_TOKEN"))
     
-    trainer.train()
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    model = AutoModelForCausalLM.from_pretrained(model_path)
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
     
-    # 8. 保存最终模型
-    trainer.save_model()
-    tokenizer.save_pretrained("./gemma3-tool-use")
+    model.push_to_hub(repo_id, private=False)
+    tokenizer.push_to_hub(repo_id, private=False)
+
+def main():
+    print("🚀 Gemma-3-1b Tool Use Fine-tuning")
     
-    print("🎉 Gemma-3-1b Tool Use微调完成！")
-    print("💾 模型已保存到 ./gemma3-tool-use")
-    print("🛠 现在可以使用工具调用功能了！")
+    # 设备配置
+    device, bf16_supported, dtype = setup_device()
+    
+    # 模型加载
+    model, tokenizer = load_model_and_tokenizer(MODEL_NAME, dtype, device)
+    model = apply_lora(model)
+    
+    # 数据准备
+    train_dataset = prepare_dataset(DATASET, DATASET_SIZE, tokenizer, MAX_LENGTH)
+    
+    # 训练配置
+    trainer = create_trainer(model, tokenizer, train_dataset, OUTPUT_DIR, bf16_supported, device)
+    
+    # 开始训练
+    print(f"Training: {len(train_dataset)} samples, {EPOCHS} epochs")
+    train_result = trainer.train()
+    
+    # 保存模型（标准做法）
+    trainer.save_model()  # 保存模型和分词器
+    print(f"✅ LoRA model saved to: {OUTPUT_DIR}")
+    
+    # 保存训练指标
+    metrics = train_result.metrics
+    trainer.log_metrics("train", metrics)
+    trainer.save_metrics("train", metrics)
+    trainer.save_state()
+    
+    # 合并LoRA权重
+    print("🔗 Merging LoRA weights...")
+    merged_dir = f"{OUTPUT_DIR}-merged"
+    merge_and_save_model(OUTPUT_DIR, merged_dir)
+    print(f"✅ Merged model saved to: {merged_dir}")
+    
+    # 可选的Hub上传（使用标准方法）
+    if os.getenv("HF_TOKEN"):
+        print("📤 Trying to upload to Hugging Face Hub...")
+        try:
+            # 加载合并后的模型并尝试上传
+            from transformers import AutoModelForCausalLM, AutoTokenizer
+            model = AutoModelForCausalLM.from_pretrained(merged_dir)
+            tokenizer = AutoTokenizer.from_pretrained(merged_dir)
+            
+            model.push_to_hub(HF_REPO_ID, private=False)
+            tokenizer.push_to_hub(HF_REPO_ID, private=False)
+            print(f"✅ Model uploaded to: https://huggingface.co/{HF_REPO_ID}")
+        except Exception as e:
+            print(f"⚠️ Upload failed: {e}")
+            print("💾 Model saved locally for manual upload")
+    else:
+        print("💾 Models saved locally. Set HF_TOKEN to upload to Hub")
 
 if __name__ == "__main__":
     main()
