@@ -108,6 +108,19 @@ def main():
             trainable_params += param.numel()
     
     print(f"📊 可训练参数: {trainable_params:,} / {all_params:,} ({100 * trainable_params / all_params:.2f}%)")
+    
+    # 检查LoRA参数
+    lora_params = 0
+    for name, param in model.named_parameters():
+        if 'lora' in name.lower():
+            lora_params += param.numel()
+            print(f"🔧 LoRA参数: {name}, requires_grad: {param.requires_grad}")
+    
+    print(f"📊 LoRA参数总数: {lora_params:,}")
+    
+    if lora_params == 0:
+        print("⚠️ 警告: 没有找到LoRA参数，可能配置有问题")
+    
     model.print_trainable_parameters()
     
     # 3. Tool Use数据 - 使用真实的工具调用数据集
@@ -179,7 +192,7 @@ def main():
         remove_unused_columns=False,
         dataloader_num_workers=2,  # 增加数据加载器工作进程
         bf16=bf16_supported,
-        gradient_checkpointing=True,  # 启用梯度检查点
+        gradient_checkpointing=False,  # 暂时禁用梯度检查点
         dataloader_pin_memory=True,  # 启用pin_memory
     )
     
