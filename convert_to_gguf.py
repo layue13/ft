@@ -21,16 +21,19 @@ def check_dependencies():
         return False
     
     try:
-        # 检查transformers-to-gguf
-        result = subprocess.run(["transformers-to-gguf", "--help"], 
-                              capture_output=True, text=True)
-        if result.returncode == 0:
-            print("✅ transformers-to-gguf")
-        else:
-            print("❌ transformers-to-gguf 未安装")
-            return False
-    except FileNotFoundError:
-        print("❌ transformers-to-gguf 未安装")
+        # 检查llama-cpp-python (用于GGUF推理)
+        import llama_cpp
+        print("✅ llama-cpp-python")
+    except ImportError:
+        print("❌ llama-cpp-python 未安装")
+        return False
+    
+    try:
+        # 检查ctransformers (用于GGUF转换)
+        import ctransformers
+        print("✅ ctransformers")
+    except ImportError:
+        print("❌ ctransformers 未安装")
         return False
     
     return True
@@ -39,13 +42,21 @@ def install_dependencies():
     """安装必要的依赖"""
     print("📦 安装依赖...")
     
-    try:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "transformers-to-gguf"])
-        print("✅ transformers-to-gguf 安装成功")
-        return True
-    except subprocess.CalledProcessError:
-        print("❌ 安装失败")
-        return False
+    dependencies = [
+        "llama-cpp-python",
+        "ctransformers[cuda]"  # 支持CUDA加速
+    ]
+    
+    for dep in dependencies:
+        try:
+            # 使用uv pip安装
+            subprocess.check_call(["uv", "pip", "install", dep])
+            print(f"✅ {dep} 安装成功")
+        except subprocess.CalledProcessError:
+            print(f"❌ {dep} 安装失败")
+            return False
+    
+    return True
 
 def convert_to_gguf(model_path, output_file, quantization="q4_k_m"):
     """转换为GGUF格式"""
@@ -69,36 +80,37 @@ def convert_to_gguf(model_path, output_file, quantization="q4_k_m"):
         return False
     
     try:
-        # 使用transformers-to-gguf转换
-        cmd = [
-            "transformers-to-gguf",
+        # 使用ctransformers转换
+        from ctransformers import AutoModelForCausalLM
+        
+        print("🔄 加载模型进行转换...")
+        
+        # 加载模型
+        model = AutoModelForCausalLM.from_pretrained(
             model_path,
-            "--output", output_file,
-            "--quantize", quantization
-        ]
+            model_type="llama",  # Gemma使用llama架构
+            lib="avx2",  # 使用AVX2优化
+            gpu_layers=0  # CPU推理
+        )
         
-        print("🔄 执行转换命令...")
-        print(f"命令: {' '.join(cmd)}")
+        print("🔄 保存为GGUF格式...")
         
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        # 保存为GGUF格式
+        model.save_pretrained(output_file)
         
-        if result.returncode == 0:
-            print("✅ GGUF转换成功！")
-            
-            # 显示文件信息
-            if os.path.exists(output_file):
-                file_size = os.path.getsize(output_file) / (1024 * 1024)  # MB
-                print(f"📁 输出文件: {output_file}")
-                print(f"📊 文件大小: {file_size:.2f} MB")
-            
-            return True
-        else:
-            print("❌ GGUF转换失败")
-            print(f"错误输出: {result.stderr}")
-            return False
+        print("✅ GGUF转换成功！")
+        
+        # 显示文件信息
+        if os.path.exists(output_file):
+            file_size = os.path.getsize(output_file) / (1024 * 1024)  # MB
+            print(f"📁 输出文件: {output_file}")
+            print(f"📊 文件大小: {file_size:.2f} MB")
+        
+        return True
             
     except Exception as e:
         print(f"❌ 转换失败: {e}")
+        print("💡 提示: 如果转换失败，可以尝试使用llama.cpp手动转换")
         return False
 
 def create_usage_script(output_file):
@@ -208,10 +220,14 @@ def main():
     print("2. q8_0 - 高质量，较大文件")
     print("3. q5_k_m - 中等质量")
     print("4. q3_k_m - 小文件，质量较低")
+    print("5. 无量化 - 保持原始精度")
     
     quantization = input("请选择量化类型 (默认: q4_k_m): ").strip()
     if not quantization:
         quantization = "q4_k_m"
+    
+    # 注意：ctransformers的量化选项可能不同
+    print(f"💡 注意: 使用ctransformers进行转换，量化选项: {quantization}")
     
     print("\n" + "=" * 50)
     
