@@ -32,7 +32,7 @@ def run_llama_cpp(model_path, prompt, max_tokens=512):
     return None
 
 def main():
-    model_path = "gemma3-1b-tool-use.gguf"
+    model_path = "gemma3-1b-tool-use"
     
     if not os.path.exists(model_path):
         print(f"模型文件不存在: {model_path}")
