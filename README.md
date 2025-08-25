@@ -13,7 +13,7 @@
 
 ### 方式A：内联脚本（推荐）
 ```bash
-uv run hf jobs uv --flavor a10g-small --secrets HF_TOKEN --script "
+hf jobs uv --flavor a10g-small --secrets HF_TOKEN --script "
 # /// script  
 # dependencies = ['transformers', 'datasets', 'peft', 'torch', 'accelerate']
 # ///
@@ -23,7 +23,7 @@ uv run hf jobs uv --flavor a10g-small --secrets HF_TOKEN --script "
 
 ### 方式B：极简脚本
 ```bash
-uv run hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel -- bash -c "git clone https://github.com/layue13/ft.git && cd ft && python simple_train.py"
+hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel bash -c "git clone https://github.com/layue13/ft.git && cd ft && python simple_train.py"
 ```
 
 详细命令见 `HF_JOBS_GUIDE.md`

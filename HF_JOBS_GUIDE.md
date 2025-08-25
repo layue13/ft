@@ -43,22 +43,14 @@ uv run hf jobs ps
 ### 3. 提交训练任务
 
 ```bash
-# 正确的命令格式（本地运行，云端执行）
-# 方式1: 使用项目的模块化架构（推荐）
-uv run hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel -- bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && uv sync && uv run python scripts/train.py --config configs/training_config_public.yaml"
-
-# 方式2: 多行命令（如果终端支持）
-uv run hf jobs run \
-    --flavor a10g-small \
-    --secrets HF_TOKEN \
-    pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel \
-    -- bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && uv sync && uv run python scripts/train.py --config configs/training_config_public.yaml"
+# 正确的命令格式
+hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel bash -c "git clone https://github.com/layue13/ft.git && cd ft && python simple_train.py"
 
 # 🚀 **第一性原理：最简方案**
 
 ## 方案A：内联UV脚本（推荐）
 ```bash
-uv run hf jobs uv --flavor a10g-small --secrets HF_TOKEN --script "
+hf jobs uv --flavor a10g-small --secrets HF_TOKEN --script "
 # /// script
 # dependencies = ['transformers', 'datasets', 'peft', 'torch', 'accelerate']
 # ///
@@ -108,7 +100,7 @@ print('🎉 训练完成！')
 
 ## 方案B：使用极简脚本
 ```bash
-uv run hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel -- bash -c "git clone https://github.com/layue13/ft.git && cd ft && python simple_train.py"
+hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel bash -c "git clone https://github.com/layue13/ft.git && cd ft && python simple_train.py"
 ```
 
 ## 🎯 **Gemma-3-1b Tool Use 优势**
@@ -207,22 +199,28 @@ hf jobs run --flavor a10g-small \
    zsh: no such file or directory: pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel
    ```
    **原因**: 多行命令在某些终端中被错误解析
-   **解决方案**: 使用项目的模块化架构:
+   **解决方案**: 使用单行命令格式:
    ```bash
-   uv run hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel -- bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && uv sync && uv run python scripts/train.py --config configs/training_config_public.yaml"
+   hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel bash -c "git clone https://github.com/layue13/ft.git && cd ft && python simple_train.py"
    ```
 
-1c. **库版本兼容性错误** 🔧
+1c. **命令格式错误** 🔧
    ```
-   TypeError: Accelerator.unwrap_model() got an unexpected keyword argument 'keep_torch_compile'
+   usage: hf <command> [<args>] jobs run: error: the following arguments are required: image
    ```
-   **根本原因**: 使用了独立的hf_jobs_train.py脚本而不是项目的模块化架构
+   **原因**: 使用了错误的命令格式，`uv run` 前缀不正确
    **解决方案**: 
-   - ✅ 使用项目的scripts/train.py（已通过本地测试）
-   - ✅ 使用uv sync自动管理依赖版本
-   - ✅ 使用配置文件而不是硬编码参数
+   ```bash
+   # ❌ 错误格式
+   uv run hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel -- bash -c "..."
    
-   **修复后的命令**: 见上方新命令格式
+   # ✅ 正确格式
+   hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel bash -c "git clone https://github.com/layue13/ft.git && cd ft && python simple_train.py"
+   
+   # 或者设置环境变量
+   export HF_TOKEN=your_hf_token_here
+   hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel bash -c "git clone https://github.com/layue13/ft.git && cd ft && python simple_train.py"
+   ```
 
 2. **认证失败**
    ```bash
