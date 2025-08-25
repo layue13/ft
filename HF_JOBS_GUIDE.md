@@ -54,36 +54,72 @@ uv run hf jobs run \
     pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel \
     -- bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && uv sync && uv run python scripts/train.py --config configs/training_config_public.yaml"
 
-# 🚀 最佳选择：使用HF Jobs的uv支持
-uv run hf jobs uv --flavor a10g-small \
-    --secrets HF_TOKEN \
-    --script "
-    # /// script
-    # dependencies = [
-    #     'transformers>=4.40.0',
-    #     'datasets>=2.14.0', 
-    #     'peft>=0.7.0',
-    #     'accelerate>=0.20.0',
-    #     'torch>=2.2.0'
-    # ]
-    # ///
-    
-    import subprocess
-    import os
-    
-    # Install git if not available
-    if os.system('which git') != 0:
-        subprocess.run(['apt-get', 'update'], check=True)
-        subprocess.run(['apt-get', 'install', '-y', 'git'], check=True)
-    
-    subprocess.run(['git', 'clone', 'https://github.com/layue13/ft.git'], check=True)
-    subprocess.run(['pip', 'install', 'uv'], check=True) 
-    subprocess.run(['uv', 'sync'], cwd='ft', check=True)
-    subprocess.run(['uv', 'run', 'python', 'scripts/train.py', '--config', 'configs/training_config_public.yaml'], cwd='ft', check=True)
-    "
+# 🚀 **第一性原理：最简方案**
 
-# 方式3: 备用单行方式（兼容性最佳）
-uv run hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel -- bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && uv sync && uv run python scripts/train.py --config configs/training_config_public.yaml"
+## 方案A：内联UV脚本（推荐）
+```bash
+uv run hf jobs uv --flavor a10g-small --secrets HF_TOKEN --script "
+# /// script
+# dependencies = ['transformers', 'datasets', 'peft', 'torch', 'accelerate']
+# ///
+
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments, Trainer
+from peft import LoraConfig, get_peft_model, TaskType
+from datasets import load_dataset
+
+# 模型和分词器
+tokenizer = AutoTokenizer.from_pretrained('microsoft/DialoGPT-small', padding_side='left')
+tokenizer.pad_token = tokenizer.eos_token
+model = AutoModelForCausalLM.from_pretrained('microsoft/DialoGPT-small', torch_dtype=torch.bfloat16, device_map='auto')
+
+# LoRA
+lora_config = LoraConfig(r=8, lora_alpha=16, lora_dropout=0.1, task_type=TaskType.CAUSAL_LM, target_modules=['c_attn', 'c_proj'])
+model = get_peft_model(model, lora_config)
+model.print_trainable_parameters()
+
+# 数据  
+dataset = load_dataset('shawhin/tool-use-finetuning', split='train[:50]')
+dataset = dataset.map(lambda x: {'text': 'user: hello\\nassistant: hi'})
+tokenized = dataset.map(lambda x: tokenizer(x['text'], truncation=True, padding='max_length', max_length=256), batched=True, remove_columns=['trace'])
+tokenized = tokenized.add_column('labels', tokenized['input_ids'])
+
+# 训练
+trainer = Trainer(
+    model=model,
+    args=TrainingArguments(output_dir='./results', num_train_epochs=1, per_device_train_batch_size=2, learning_rate=1e-4, logging_steps=5, save_strategy='no', push_to_hub=True, report_to='none', dataloader_num_workers=0, remove_unused_columns=False),
+    train_dataset=tokenized,
+    tokenizer=tokenizer
+)
+trainer.train()
+print('🎉 训练完成！')
+"
+```
+
+## 方案B：使用极简脚本
+```bash
+uv run hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel -- bash -c "git clone https://github.com/layue13/ft.git && cd ft && python simple_train.py"
+```
+
+## 🎯 **第一性原理优势**
+
+✅ **极简化**：
+- 无复杂配置文件
+- 无多层模块结构  
+- 单个脚本包含所有逻辑
+
+✅ **直接运行**：
+- 内联脚本：无需git clone
+- 极简脚本：一行命令搞定
+- 自动依赖管理
+
+✅ **快速测试**：
+- 小数据集（50样本）
+- 短序列（256 tokens）
+- 1个epoch训练
+- 无中间保存
+
+💰 **成本估算**：2-3分钟训练 ≈ $0.10
 ```
 
 ### 4. 监控任务
