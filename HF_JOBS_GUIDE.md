@@ -68,26 +68,36 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments,
 from peft import LoraConfig, get_peft_model, TaskType
 from datasets import load_dataset
 
-# 模型和分词器
-tokenizer = AutoTokenizer.from_pretrained('microsoft/DialoGPT-small', padding_side='left')
+# Gemma-3-1b Tool Use 微调
+tokenizer = AutoTokenizer.from_pretrained('google/gemma2-1.1b-it', padding_side='right')
 tokenizer.pad_token = tokenizer.eos_token
-model = AutoModelForCausalLM.from_pretrained('microsoft/DialoGPT-small', torch_dtype=torch.bfloat16, device_map='auto')
+model = AutoModelForCausalLM.from_pretrained('google/gemma2-1.1b-it', torch_dtype=torch.bfloat16, device_map='auto', trust_remote_code=True)
 
-# LoRA
-lora_config = LoraConfig(r=8, lora_alpha=16, lora_dropout=0.1, task_type=TaskType.CAUSAL_LM, target_modules=['c_attn', 'c_proj'])
+# LoRA - 针对Gemma优化
+lora_config = LoraConfig(r=16, lora_alpha=32, lora_dropout=0.1, task_type=TaskType.CAUSAL_LM, target_modules=['q_proj', 'v_proj', 'k_proj', 'o_proj', 'gate_proj', 'up_proj', 'down_proj'])
 model = get_peft_model(model, lora_config)
 model.print_trainable_parameters()
 
-# 数据  
-dataset = load_dataset('shawhin/tool-use-finetuning', split='train[:50]')
-dataset = dataset.map(lambda x: {'text': 'user: hello\\nassistant: hi'})
-tokenized = dataset.map(lambda x: tokenizer(x['text'], truncation=True, padding='max_length', max_length=256), batched=True, remove_columns=['trace'])
+# Tool Use数据格式化 - 正确格式
+def format_tool_use(example):
+    if 'trace' not in example or not example.get('tool_needed'): 
+        return {'text': '<bos><start_of_turn>user\\nhello<end_of_turn>\\n<start_of_turn>model\\nHello!<end_of_turn><eos>'}
+    conv = '<bos>'
+    for msg in example['trace']:
+        if msg.get('role') == 'user': conv += f'<start_of_turn>user\\n{msg.get(\"content\", \"\")}<end_of_turn>\\n'
+    if example.get('tool_needed') and example.get('tool_name'):
+        tool_call = f'<tool_call>\\n{{\\n \"tool_name\": \"{example[\"tool_name\"]}\",\\n \"args\": {{}}\\n}}\\n</tool_call>'
+        conv += f'<start_of_turn>model\\n{tool_call}<end_of_turn>'
+    return {'text': conv + '<eos>'}
+
+dataset = load_dataset('shawhin/tool-use-finetuning', split='train[:200]').map(format_tool_use)
+tokenized = dataset.map(lambda x: tokenizer(x['text'], truncation=True, padding='max_length', max_length=512), batched=True, remove_columns=dataset.column_names)
 tokenized = tokenized.add_column('labels', tokenized['input_ids'])
 
-# 训练
+# 训练 - Tool Use优化参数
 trainer = Trainer(
     model=model,
-    args=TrainingArguments(output_dir='./results', num_train_epochs=1, per_device_train_batch_size=2, learning_rate=1e-4, logging_steps=5, save_strategy='no', push_to_hub=True, report_to='none', dataloader_num_workers=0, remove_unused_columns=False),
+    args=TrainingArguments(output_dir='./gemma3-tool-use', num_train_epochs=2, per_device_train_batch_size=1, gradient_accumulation_steps=4, learning_rate=2e-5, warmup_ratio=0.1, logging_steps=10, save_strategy='epoch', push_to_hub=True, hub_model_id='gemma3-1b-tool-use', bf16=True, gradient_checkpointing=True, remove_unused_columns=False),
     train_dataset=tokenized,
     tokenizer=tokenizer
 )
@@ -101,25 +111,27 @@ print('🎉 训练完成！')
 uv run hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel -- bash -c "git clone https://github.com/layue13/ft.git && cd ft && python simple_train.py"
 ```
 
-## 🎯 **第一性原理优势**
+## 🎯 **Gemma-3-1b Tool Use 优势**
 
-✅ **极简化**：
-- 无复杂配置文件
-- 无多层模块结构  
-- 单个脚本包含所有逻辑
+✅ **专业目标**：
+- 🤖 Gemma-3-1b: 优秀的小模型
+- 🛠 Tool Use: 工具调用能力
+- 📊 shawhin/tool-use-finetuning: 专业数据集
+- 🎯 XML格式: <tool_call>标准
 
-✅ **直接运行**：
-- 内联脚本：无需git clone
-- 极简脚本：一行命令搞定
-- 自动依赖管理
+✅ **优化设置**：
+- LoRA r=16: 适合工具调用的复杂性
+- 目标模块: Gemma全注意力层
+- 序列长度512: 支持复杂工具调用
+- 学习率2e-5: 保护预训练知识
 
-✅ **快速测试**：
-- 小数据集（50样本）
-- 短序列（256 tokens）
-- 1个epoch训练
-- 无中间保存
+✅ **云端训练**：
+- 200训练样本: 快速验证
+- 2个epoch: 充分学习
+- A10G GPU: 高效训练
+- 15-20分钟完成
 
-💰 **成本估算**：2-3分钟训练 ≈ $0.10
+💰 **成本估算**：15-20分钟训练 ≈ $0.50
 ```
 
 ### 4. 监控任务

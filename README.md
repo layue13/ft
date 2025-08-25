@@ -51,10 +51,12 @@ ft/
 
 ## 🎯 微调目标
 
-- **模型**：DialoGPT-small（公开可用）
-- **方法**：LoRA微调（参数高效）
-- **数据**：50样本快速验证
-- **时长**：1个epoch，2-3分钟
+- **模型**：Gemma-3-1b（google/gemma2-1.1b-it）
+- **能力**：Tool Use - 学会调用工具和函数
+- **数据**：shawhin/tool-use-finetuning（597个专业样本）
+- **格式**：XML工具调用 - `<tool_call>{"tool_name": "xxx", "args": {}}</tool_call>`
+- **方法**：LoRA微调（r=16，针对全注意力层）
+- **时长**：2个epoch，15-20分钟，成本约$0.50
 
 ## 🚀 立即开始
 
