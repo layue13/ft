@@ -10,6 +10,20 @@ import subprocess
 import platform
 from pathlib import Path
 
+def install_with_uv():
+    """使用uv安装llama-cpp-python"""
+    print("📦 使用uv安装llama-cpp-python...")
+    
+    try:
+        subprocess.run([
+            "uv", "add", "llama-cpp-python"
+        ], check=True)
+        print("✅ uv安装成功")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"❌ uv安装失败: {e}")
+        return False
+
 def install_with_pip():
     """使用pip安装llama-cpp-python"""
     print("📦 使用pip安装llama-cpp-python...")
@@ -18,7 +32,7 @@ def install_with_pip():
         subprocess.run([
             sys.executable, "-m", "pip", "install", "llama-cpp-python"
         ], check=True)
-        print("✅ llama-cpp-python安装成功")
+        print("✅ pip安装成功")
         return True
     except subprocess.CalledProcessError as e:
         print(f"❌ pip安装失败: {e}")
@@ -72,29 +86,32 @@ def main():
     print("=" * 40)
     
     print("\n🔧 选择安装方式:")
-    print("1. pip安装 (推荐)")
-    print("2. conda安装")
-    print("3. Homebrew安装 (macOS)")
-    print("4. 下载预编译版本")
-    print("5. 手动安装")
+    print("1. uv安装 (推荐)")
+    print("2. pip安装")
+    print("3. conda安装")
+    print("4. Homebrew安装 (macOS)")
+    print("5. 下载预编译版本")
+    print("6. 手动安装")
     
     choice = input("\n请选择 (默认1): ").strip() or "1"
     
     success = False
     
     if choice == "1":
-        success = install_with_pip()
+        success = install_with_uv()
     elif choice == "2":
-        success = install_with_conda()
+        success = install_with_pip()
     elif choice == "3":
-        success = install_with_brew()
+        success = install_with_conda()
     elif choice == "4":
-        success = download_prebuilt()
+        success = install_with_brew()
     elif choice == "5":
+        success = download_prebuilt()
+    elif choice == "6":
         print("\n📝 手动安装说明:")
         print("1. 访问: https://github.com/ggml-org/llama.cpp")
         print("2. 按照README中的说明进行安装")
-        print("3. 或者使用: pip install llama-cpp-python")
+        print("3. 或者使用: uv add llama-cpp-python")
         return
     
     if success:
@@ -108,9 +125,10 @@ def main():
     else:
         print("\n❌ 安装失败")
         print("\n💡 其他选项:")
-        print("1. 使用pip: pip install llama-cpp-python")
-        print("2. 手动编译: https://github.com/ggml-org/llama.cpp")
-        print("3. 使用预编译版本")
+        print("1. 使用uv: uv add llama-cpp-python")
+        print("2. 使用pip: pip install llama-cpp-python")
+        print("3. 手动编译: https://github.com/ggml-org/llama.cpp")
+        print("4. 使用预编译版本")
 
 if __name__ == "__main__":
     main()

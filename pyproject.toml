@@ -32,6 +32,11 @@ dev = [
     "flake8>=6.0.0",
 ]
 
+# 模型转换相关依赖
+convert = [
+    "llama-cpp-python>=0.2.0",
+]
+
 # 仅在Linux/Windows上安装bitsandbytes
 linux = ["bitsandbytes>=0.41.0"]
 windows = ["bitsandbytes>=0.41.0"]

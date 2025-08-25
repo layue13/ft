@@ -317,13 +317,16 @@ python merge_lora.py
 如果遇到编译问题，可以使用预编译版本：
 
 ```bash
-# 方式1: 使用pip安装 (推荐)
-pip install llama-cpp-python
+# 方式1: 使用uv安装 (推荐)
+uv add llama-cpp-python
 
 # 方式2: 使用我们的安装脚本
 python install_llama_cpp.py
 
-# 方式3: 使用Homebrew (macOS)
+# 方式3: 使用pip安装
+pip install llama-cpp-python
+
+# 方式4: 使用Homebrew (macOS)
 brew install llama-cpp
 ```
 
