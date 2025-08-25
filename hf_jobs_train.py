@@ -74,12 +74,40 @@ def main():
     )
     
     # 2. LoRA配置 - 针对Gemma模型
+    print("🔧 配置LoRA...")
+    
+    # 检查模型结构，找到可训练的模块
+    target_modules = []
+    for name, module in model.named_modules():
+        if any(target in name for target in ["q_proj", "v_proj", "k_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]):
+            target_modules.append(name.split('.')[-1])  # 只取模块名，不取完整路径
+            print(f"✅ 找到目标模块: {name}")
+    
+    if not target_modules:
+        print("⚠️ 未找到目标模块，使用默认配置")
+        target_modules = ["q_proj", "v_proj", "k_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+    
     lora_config = LoraConfig(
         r=16, lora_alpha=32, lora_dropout=0.1,
         task_type=TaskType.CAUSAL_LM,
-        target_modules=["q_proj", "v_proj", "k_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+        target_modules=target_modules,
+        bias="none",
+        inference_mode=False
     )
     model = get_peft_model(model, lora_config)
+    
+    # 确保模型处于训练模式
+    model.train()
+    
+    # 检查可训练参数
+    trainable_params = 0
+    all_params = 0
+    for param in model.parameters():
+        all_params += param.numel()
+        if param.requires_grad:
+            trainable_params += param.numel()
+    
+    print(f"📊 可训练参数: {trainable_params:,} / {all_params:,} ({100 * trainable_params / all_params:.2f}%)")
     model.print_trainable_parameters()
     
     # 3. Tool Use数据 - 使用真实的工具调用数据集
