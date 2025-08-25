@@ -43,9 +43,23 @@ uv run python simple_train.py
 
 ### 云端训练 (HF Jobs)
 
+#### 硬件选择
+
+根据[Hugging Face Jobs文档](https://huggingface.co/docs/huggingface_hub/main/en/guides/cli#hf-jobs)，有多种硬件选择：
+
+**经济型选择** (推荐):
 ```bash
-# 一键部署到HF Jobs
-hf jobs run --flavor a100-40gb --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel bash -c "
+# T4 GPU - 性价比最高
+hf jobs run --flavor t4-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel bash -c "
+pip install uv &&
+git clone https://github.com/layue13/ft.git &&
+cd ft &&
+uv sync &&
+uv run python hf_jobs_train.py
+"
+
+# L4 GPU - 中等性能
+hf jobs run --flavor l4x1 --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel bash -c "
 pip install uv &&
 git clone https://github.com/layue13/ft.git &&
 cd ft &&
@@ -53,6 +67,51 @@ uv sync &&
 uv run python hf_jobs_train.py
 "
 ```
+
+**高性能选择**:
+```bash
+# A10G GPU - 平衡性能
+hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel bash -c "
+pip install uv &&
+git clone https://github.com/layue13/ft.git &&
+cd ft &&
+uv sync &&
+uv run python hf_jobs_train.py
+"
+
+# A100 GPU - 最高性能
+hf jobs run --flavor a100-large --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel bash -c "
+pip install uv &&
+git clone https://github.com/layue13/ft.git &&
+cd ft &&
+uv sync &&
+uv run python hf_jobs_train.py
+"
+```
+
+**CPU选择** (最经济):
+```bash
+# CPU训练 - 最便宜但较慢
+hf jobs run --flavor cpu-upgrade --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel bash -c "
+pip install uv &&
+git clone https://github.com/layue13/ft.git &&
+cd ft &&
+uv sync &&
+uv run python hf_jobs_train.py
+"
+```
+
+#### 硬件选择指南
+
+| 硬件 | 适用场景 | 训练时间 | 成本 | 推荐度 |
+|------|----------|----------|------|--------|
+| **T4-small** | 预算有限，不着急 | 2-4小时 | $0.5-1 | ⭐⭐⭐⭐⭐ |
+| **L4x1** | 平衡性能和成本 | 1.5-3小时 | $1-1.5 | ⭐⭐⭐⭐ |
+| **A10G-small** | 快速训练 | 1-2小时 | $1-2 | ⭐⭐⭐ |
+| **A100-large** | 最快训练 | 30-60分钟 | $2-4 | ⭐⭐ |
+| **CPU-upgrade** | 最经济 | 4-8小时 | $0.2-0.5 | ⭐⭐⭐ |
+
+**推荐**: 首次尝试建议使用 `t4-small`，性价比最高！
 
 ## 📊 项目特性
 
@@ -62,8 +121,8 @@ uv run python hf_jobs_train.py
 | **数据集** | shawhin/tool-use-finetuning (477个样本) |
 | **微调方法** | LoRA (Low-Rank Adaptation) |
 | **依赖管理** | uv |
-| **训练时间** | 1-2小时 (A100) |
-| **预期成本** | $2-4 (HF Jobs) |
+| **训练时间** | 2-4小时 (T4) / 1-2小时 (A10G) / 30-60分钟 (A100) |
+| **预期成本** | $0.5-1 (T4) / $1-2 (A10G) / $2-4 (A100) |
 
 ## 🔧 技术栈
 
