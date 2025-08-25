@@ -48,7 +48,7 @@ uv run hf jobs run \
     --flavor a10g-small \
     --secrets HF_TOKEN \
     pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel \
-    bash -c "git clone https://github.com/layue13/ft.git && cd ft && pip install uv && uv run python hf_jobs_train.py"
+    bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && uv run python hf_jobs_train.py"
 
 # 🚀 最佳选择：使用HF Jobs的uv支持
 uv run hf jobs uv --flavor a10g-small \
@@ -65,13 +65,20 @@ uv run hf jobs uv --flavor a10g-small \
     # ///
     
     import subprocess
-    subprocess.run(['git', 'clone', 'https://github.com/layue13/ft.git'])
-    subprocess.run(['python', 'ft/hf_jobs_train.py'])
+    import os
+    
+    # Install git if not available
+    if os.system('which git') != 0:
+        subprocess.run(['apt-get', 'update'], check=True)
+        subprocess.run(['apt-get', 'install', '-y', 'git'], check=True)
+    
+    subprocess.run(['git', 'clone', 'https://github.com/layue13/ft.git'], check=True)
+    subprocess.run(['python', 'ft/hf_jobs_train.py'], check=True)
     "
 
-# 或者传统方式
+# 或者传统方式（已修复git问题）
 uv run hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel \
-    bash -c "git clone https://github.com/layue13/ft.git && cd ft && pip install uv && uv run python hf_jobs_train.py"
+    bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && uv run python hf_jobs_train.py"
 ```
 
 ### 4. 监控任务
@@ -131,18 +138,28 @@ hf jobs run --flavor a10g-small \
 
 ### 常见问题
 
-1. **认证失败**
+1. **git命令未找到** 🔧
+   ```
+   bash: line 1: git: command not found
+   ```
+   **解决方案**: 命令中已包含git安装，或使用修复版本:
+   ```bash
+   uv run hf jobs run --flavor a10g-small --secrets HF_TOKEN pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel \
+       bash -c "apt-get update && apt-get install -y git && git clone https://github.com/layue13/ft.git && cd ft && pip install uv && uv run python hf_jobs_train.py"
+   ```
+
+2. **认证失败**
    ```bash
    huggingface-cli login --token <your-token>
    ```
 
-2. **任务失败**
+3. **任务失败**
    ```bash
    # 查看详细日志
-   hf jobs logs <job-id>
+   uv run hf jobs logs <job-id>
    ```
 
-3. **内存不足**
+4. **内存不足**
    - 升级到更大的GPU规格
    - 减少batch_size
    - 启用gradient_checkpointing
